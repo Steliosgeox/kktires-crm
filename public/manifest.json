@@ -1,0 +1,105 @@
+{
+  "name": "KK Tires CRM",
+  "short_name": "KK Tires",
+  "description": "Σύστημα Διαχείρισης Πελατών για KK Tires - Ελαστικά & Ζάντες",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#06b6d4",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "el",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dashboard Overview"
+    },
+    {
+      "src": "/screenshots/customers.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Customer Management"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Νέος Πελάτης",
+      "short_name": "Νέος",
+      "description": "Προσθήκη νέου πελάτη",
+      "url": "/customers?new=true",
+      "icons": [{ "src": "/icons/shortcut-add.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Email Marketing",
+      "short_name": "Email",
+      "description": "Αποστολή email καμπάνιας",
+      "url": "/email",
+      "icons": [{ "src": "/icons/shortcut-email.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Εργασίες",
+      "short_name": "Tasks",
+      "description": "Προβολή εργασιών",
+      "url": "/tasks",
+      "icons": [{ "src": "/icons/shortcut-tasks.png", "sizes": "96x96" }]
+    }
+  ]
+}
+
