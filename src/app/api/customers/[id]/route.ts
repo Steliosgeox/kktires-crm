@@ -8,12 +8,14 @@ const DEFAULT_ORG_ID = 'org_kktires';
 // GET single customer
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
     const customer = await db.query.customers.findFirst({
       where: (c, { eq, and }) => and(
-        eq(c.id, params.id),
+        eq(c.id, id),
         eq(c.orgId, DEFAULT_ORG_ID)
       ),
     });
@@ -38,9 +40,10 @@ export async function GET(
 // UPDATE customer
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     
     const updated = await db
@@ -64,7 +67,7 @@ export async function PUT(
         updatedAt: new Date(),
       })
       .where(and(
-        eq(customers.id, params.id),
+        eq(customers.id, id),
         eq(customers.orgId, DEFAULT_ORG_ID)
       ))
       .returning();
@@ -89,13 +92,15 @@ export async function PUT(
 // DELETE customer
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
     const deleted = await db
       .delete(customers)
       .where(and(
-        eq(customers.id, params.id),
+        eq(customers.id, id),
         eq(customers.orgId, DEFAULT_ORG_ID)
       ))
       .returning();
@@ -116,4 +121,3 @@ export async function DELETE(
     );
   }
 }
-

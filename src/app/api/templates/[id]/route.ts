@@ -7,12 +7,14 @@ const DEFAULT_ORG_ID = 'org_kktires';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
     const template = await db.query.emailTemplates.findFirst({
       where: (t, { eq, and }) => and(
-        eq(t.id, params.id),
+        eq(t.id, id),
         eq(t.orgId, DEFAULT_ORG_ID)
       ),
     });
@@ -30,9 +32,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
 
     const updated = await db
@@ -45,7 +48,7 @@ export async function PUT(
         updatedAt: new Date(),
       })
       .where(and(
-        eq(emailTemplates.id, params.id),
+        eq(emailTemplates.id, id),
         eq(emailTemplates.orgId, DEFAULT_ORG_ID)
       ))
       .returning();
@@ -63,13 +66,15 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
+    
     const deleted = await db
       .delete(emailTemplates)
       .where(and(
-        eq(emailTemplates.id, params.id),
+        eq(emailTemplates.id, id),
         eq(emailTemplates.orgId, DEFAULT_ORG_ID)
       ))
       .returning();
@@ -84,4 +89,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 });
   }
 }
-
