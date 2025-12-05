@@ -205,8 +205,8 @@ export default function CustomersPage() {
     router.push('/import');
   };
 
-  const handlePageSizeChange = (value: string) => {
-    setPagination(prev => ({ ...prev, limit: parseInt(value), page: 1 }));
+  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setPagination(prev => ({ ...prev, limit: parseInt(e.target.value), page: 1 }));
   };
 
   const filteredCustomers = customers.filter((customer) => {
