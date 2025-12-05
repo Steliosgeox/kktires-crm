@@ -205,7 +205,7 @@ export default function MapPage() {
     if (customers.length > 0 && googleMapRef.current) {
       const bounds = new google.maps.LatLngBounds();
       customers.forEach(c => bounds.extend({ lat: c.latitude, lng: c.longitude }));
-      googleMapRef.current.fitBounds(bounds, { padding: 50 });
+      googleMapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
     }
   }, [customers, mapLoaded]);
 
