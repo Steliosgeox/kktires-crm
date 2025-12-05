@@ -27,7 +27,7 @@ async function getGmailAccessToken(userId: string): Promise<string | null> {
   }
 
   // Check if token is expired and refresh if needed
-  if (account.expiresAt && account.expiresAt * 1000 < Date.now()) {
+  if (account.expiresAt && account.expiresAt.getTime() < Date.now()) {
     // Token is expired, try to refresh
     if (!account.refreshToken) {
       return null;
@@ -57,7 +57,7 @@ async function getGmailAccessToken(userId: string): Promise<string | null> {
         .update(accounts)
         .set({
           accessToken: tokens.accessToken,
-          expiresAt: Math.floor(Date.now() / 1000 + tokens.expires_in),
+          expiresAt: new Date(Date.now() + tokens.expires_in * 1000),
         })
         .where(eq(accounts.id, account.id));
 
