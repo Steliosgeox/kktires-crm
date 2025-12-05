@@ -156,7 +156,7 @@ export default function SegmentsPage() {
     });
   }
 
-  function updateCondition(index: number, updates: Partial<{ field: string; operator: string; value: unknown }>) {
+  function updateCondition(index: number, updates: Partial<{ field: string; operator: string; value: string }>) {
     const newConditions = [...newSegment.filters.conditions];
     newConditions[index] = { ...newConditions[index], ...updates };
     setNewSegment({
