@@ -156,7 +156,7 @@ export default function SegmentsPage() {
     });
   }
 
-  function updateCondition(index: number, updates: Partial<{ field: string; operator: string; value: string }>) {
+  function updateCondition(index: number, updates: Partial<{ field: string; operator: string; value: unknown }>) {
     const newConditions = [...newSegment.filters.conditions];
     newConditions[index] = { ...newConditions[index], ...updates };
     setNewSegment({
@@ -312,7 +312,7 @@ export default function SegmentsPage() {
                           {fieldType === 'boolean' ? (
                             <select
                               value={condition.value as string}
-                              onChange={(e) => updateCondition(index, { value: e.target.value })}
+                              onChange={(e) => updateCondition(index, { value: e.target.value === 'true' })}
                               className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50"
                             >
                               <option value="true">Ναι</option>
