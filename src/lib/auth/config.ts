@@ -72,7 +72,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, account }: { token: Record<string, unknown>; user?: { id?: string }; account?: { provider?: string; access_token?: string; refresh_token?: string } | null }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async jwt({ token, user, account }: any) {
       if (user) {
         token.id = user.id;
       }
@@ -100,7 +101,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return token;
     },
-    async session({ session, token }: { session: { user?: { id?: string; currentOrgId?: string; currentOrgRole?: string } }; token: Record<string, unknown> }) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async session({ session, token }: any) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.currentOrgId = token.currentOrgId as string;
