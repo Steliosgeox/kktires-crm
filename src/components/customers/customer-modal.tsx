@@ -22,9 +22,9 @@ interface Customer {
   postalCode: string | null;
   afm: string | null;
   doy: string | null;
-  category: string;
-  revenue: number;
-  isVip: boolean;
+  category: string | null;
+  revenue: number | null;
+  isVip: boolean | null;
   notes: string | null;
 }
 
@@ -157,8 +157,8 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             />
             <GlassSelect
               label="Κατηγορία"
-              value={formData.category}
-              onChange={(value) => handleChange('category', value)}
+              value={formData.category ?? 'retail'}
+              onChange={(e) => handleChange('category', e.target.value)}
               options={categoryOptions}
               disabled={isReadOnly}
             />
@@ -168,7 +168,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={formData.isVip}
+                checked={formData.isVip ?? false}
                 onChange={(e) => handleChange('isVip', e.target.checked)}
                 disabled={isReadOnly}
                 className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyan-500"
@@ -270,7 +270,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
           <GlassInput
             label="Τζίρος (€)"
             type="number"
-            value={formData.revenue}
+            value={formData.revenue ?? 0}
             onChange={(e) => handleChange('revenue', parseFloat(e.target.value) || 0)}
             disabled={isReadOnly}
           />
