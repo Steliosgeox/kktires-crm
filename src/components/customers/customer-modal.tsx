@@ -23,9 +23,9 @@ interface Customer {
   postalCode: string | null;
   afm: string | null;
   doy: string | null;
-  category: string;
-  revenue: number;
-  isVip: boolean;
+  category: string | null;
+  revenue: number | null;
+  isVip: boolean | null;
   notes: string | null;
 }
 
