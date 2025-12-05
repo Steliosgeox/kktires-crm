@@ -334,7 +334,7 @@ export default function SegmentsPage() {
                               type={fieldType === 'number' ? 'number' : 'text'}
                               value={condition.value as string}
                               onChange={(e) => updateCondition(index, { 
-                                value: fieldType === 'number' ? Number(e.target.value) : e.target.value 
+                                value: e.target.value 
                               })}
                               placeholder="Τιμή..."
                               className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-white/40 text-sm focus:outline-none focus:border-cyan-500/50"
