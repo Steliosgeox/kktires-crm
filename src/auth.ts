@@ -30,7 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user }) {
+    async signIn({ user }: { user: { email?: string | null } }) {
       // Check if the user's email is allowed
       const email = user.email?.toLowerCase();
       if (!email) return false;
@@ -49,14 +49,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Reject sign in
       return false;
     },
-    async session({ session, user }) {
+    async session({ session, user }: { session: Record<string, unknown>; user: { id: string } }) {
       // Add user ID to session
-      if (session.user) {
-        session.user.id = user.id;
+      if (session.user && typeof session.user === 'object') {
+        (session.user as Record<string, unknown>).id = user.id;
       }
       return session;
     },
-    async jwt({ token, account }) {
+    async jwt({ token, account }: { token: Record<string, unknown>; account?: { access_token?: string; refresh_token?: string } | null }) {
       // Persist the OAuth access_token to the token right after signin
       if (account) {
         token.accessToken = account.access_token;

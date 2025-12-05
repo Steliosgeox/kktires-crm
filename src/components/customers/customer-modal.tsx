@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, Loader2, User, Building, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
 import { GlassModal } from '@/components/ui/glass-modal';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -77,9 +77,9 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
   }, [customer, mode, isOpen]);
 
   const handleChange = (field: keyof Customer, value: string | number | boolean | null) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev: Customer) => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+      setErrors((prev: Record<string, string>) => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -134,14 +134,14 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             <GlassInput
               label="Όνομα *"
               value={formData.firstName}
-              onChange={(e) => handleChange('firstName', e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('firstName', e.target.value)}
               disabled={isReadOnly}
               error={errors.firstName}
             />
             <GlassInput
               label="Επώνυμο"
               value={formData.lastName || ''}
-              onChange={(e) => handleChange('lastName', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('lastName', e.target.value || null)}
               disabled={isReadOnly}
             />
           </div>
@@ -150,14 +150,14 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             <GlassInput
               label="Εταιρεία"
               value={formData.company || ''}
-              onChange={(e) => handleChange('company', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('company', e.target.value || null)}
               disabled={isReadOnly}
               leftIcon={<Building className="h-4 w-4" />}
             />
             <GlassSelect
               label="Κατηγορία"
               value={formData.category ?? 'retail'}
-              onChange={(e) => handleChange('category', e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChange('category', e.target.value)}
               options={categoryOptions}
               disabled={isReadOnly}
             />
@@ -168,7 +168,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
               <input
                 type="checkbox"
                 checked={formData.isVip ?? false}
-                onChange={(e) => handleChange('isVip', e.target.checked)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('isVip', e.target.checked)}
                 disabled={isReadOnly}
                 className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyan-500"
               />
@@ -189,7 +189,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
               label="Email"
               type="email"
               value={formData.email || ''}
-              onChange={(e) => handleChange('email', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('email', e.target.value || null)}
               disabled={isReadOnly}
               leftIcon={<Mail className="h-4 w-4" />}
               error={errors.email}
@@ -197,7 +197,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             <GlassInput
               label="Τηλέφωνο"
               value={formData.phone || ''}
-              onChange={(e) => handleChange('phone', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('phone', e.target.value || null)}
               disabled={isReadOnly}
               leftIcon={<Phone className="h-4 w-4" />}
             />
@@ -206,7 +206,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
           <GlassInput
             label="Κινητό"
             value={formData.mobile || ''}
-            onChange={(e) => handleChange('mobile', e.target.value || null)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('mobile', e.target.value || null)}
             disabled={isReadOnly}
             leftIcon={<Phone className="h-4 w-4" />}
           />
@@ -222,7 +222,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
           <GlassInput
             label="Οδός"
             value={formData.street || ''}
-            onChange={(e) => handleChange('street', e.target.value || null)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('street', e.target.value || null)}
             disabled={isReadOnly}
           />
 
@@ -230,13 +230,13 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             <GlassInput
               label="Πόλη"
               value={formData.city || ''}
-              onChange={(e) => handleChange('city', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('city', e.target.value || null)}
               disabled={isReadOnly}
             />
             <GlassInput
               label="Τ.Κ."
               value={formData.postalCode || ''}
-              onChange={(e) => handleChange('postalCode', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('postalCode', e.target.value || null)}
               disabled={isReadOnly}
             />
             <div /> {/* Spacer */}
@@ -254,14 +254,14 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             <GlassInput
               label="ΑΦΜ"
               value={formData.afm || ''}
-              onChange={(e) => handleChange('afm', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('afm', e.target.value || null)}
               disabled={isReadOnly}
               error={errors.afm}
             />
             <GlassInput
               label="ΔΟΥ"
               value={formData.doy || ''}
-              onChange={(e) => handleChange('doy', e.target.value || null)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('doy', e.target.value || null)}
               disabled={isReadOnly}
             />
           </div>
@@ -270,7 +270,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             label="Τζίρος (€)"
             type="number"
             value={formData.revenue ?? 0}
-            onChange={(e) => handleChange('revenue', parseFloat(e.target.value) || 0)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('revenue', parseFloat(e.target.value) || 0)}
             disabled={isReadOnly}
           />
         </div>
@@ -280,7 +280,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
           <GlassTextarea
             label="Σημειώσεις"
             value={formData.notes || ''}
-            onChange={(e) => handleChange('notes', e.target.value || null)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleChange('notes', e.target.value || null)}
             disabled={isReadOnly}
             rows={3}
           />

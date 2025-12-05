@@ -72,7 +72,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account }: { token: Record<string, unknown>; user?: { id?: string }; account?: { provider?: string; access_token?: string; refresh_token?: string } | null }) {
       if (user) {
         token.id = user.id;
       }
@@ -100,13 +100,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: { user?: { id?: string; currentOrgId?: string; currentOrgRole?: string } }; token: Record<string, unknown> }) {
       if (session.user) {
         session.user.id = token.id as string;
-        // @ts-expect-error - extending session type
-        session.user.currentOrgId = token.currentOrgId;
-        // @ts-expect-error - extending session type
-        session.user.currentOrgRole = token.currentOrgRole;
+        session.user.currentOrgId = token.currentOrgId as string;
+        session.user.currentOrgRole = token.currentOrgRole as string;
       }
       return session;
     },

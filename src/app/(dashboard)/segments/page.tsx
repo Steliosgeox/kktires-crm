@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FolderKanban, Plus, Trash2, Search, Users, 
@@ -150,7 +150,7 @@ export default function SegmentsPage() {
       ...newSegment,
       filters: {
         ...newSegment.filters,
-        conditions: newSegment.filters.conditions.filter((_, i) => i !== index),
+        conditions: newSegment.filters.conditions.filter((_: { field: string; operator: string; value: string }, i: number) => i !== index),
       },
     });
   }
@@ -167,7 +167,7 @@ export default function SegmentsPage() {
     });
   }
 
-  const filteredSegments = segments.filter(segment =>
+  const filteredSegments = segments.filter((segment: Segment) =>
     segment.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     segment.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -206,7 +206,7 @@ export default function SegmentsPage() {
             type="text"
             placeholder="Αναζήτηση τμημάτων..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
             className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2.5 text-white placeholder:text-white/40 focus:outline-none focus:border-cyan-500/50"
           />
         </div>
@@ -240,7 +240,7 @@ export default function SegmentsPage() {
                   <input
                     type="text"
                     value={newSegment.name}
-                    onChange={(e) => setNewSegment({ ...newSegment, name: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSegment({ ...newSegment, name: e.target.value })}
                     placeholder="π.χ. VIP Πελάτες Αθήνας"
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder:text-white/40 focus:outline-none focus:border-cyan-500/50"
                   />
@@ -250,7 +250,7 @@ export default function SegmentsPage() {
                   <label className="block text-white/60 text-sm mb-1">Περιγραφή</label>
                   <textarea
                     value={newSegment.description}
-                    onChange={(e) => setNewSegment({ ...newSegment, description: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewSegment({ ...newSegment, description: e.target.value })}
                     placeholder="Περιγραφή του τμήματος..."
                     rows={2}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder:text-white/40 focus:outline-none focus:border-cyan-500/50 resize-none"
@@ -265,7 +265,7 @@ export default function SegmentsPage() {
                       <span className="text-white/40">Λογική:</span>
                       <select
                         value={newSegment.filters.logic}
-                        onChange={(e) => setNewSegment({
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewSegment({
                           ...newSegment,
                           filters: { ...newSegment.filters, logic: e.target.value as 'and' | 'or' }
                         })}
@@ -278,7 +278,7 @@ export default function SegmentsPage() {
                   </div>
                   
                   <div className="space-y-3">
-                    {newSegment.filters.conditions.map((condition, index) => {
+                    {newSegment.filters.conditions.map((condition: { field: string; operator: string; value: string }, index: number) => {
                       const fieldType = getFieldType(condition.field);
                       const operators = OPERATORS[fieldType as keyof typeof OPERATORS] || OPERATORS.text;
                       const fieldConfig = FILTER_FIELDS.find(f => f.value === condition.field);
@@ -288,7 +288,7 @@ export default function SegmentsPage() {
                           {/* Field */}
                           <select
                             value={condition.field}
-                            onChange={(e) => updateCondition(index, { field: e.target.value, operator: 'equals', value: '' })}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateCondition(index, { field: e.target.value, operator: 'equals', value: '' })}
                             className="bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50 flex-shrink-0"
                           >
                             {FILTER_FIELDS.map(field => (
@@ -299,7 +299,7 @@ export default function SegmentsPage() {
                           {/* Operator */}
                           <select
                             value={condition.operator}
-                            onChange={(e) => updateCondition(index, { operator: e.target.value })}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateCondition(index, { operator: e.target.value })}
                             className="bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50 flex-shrink-0"
                           >
                             {operators.map(op => (
@@ -311,7 +311,7 @@ export default function SegmentsPage() {
                           {fieldType === 'boolean' ? (
                             <select
                               value={condition.value as string}
-                              onChange={(e) => updateCondition(index, { value: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateCondition(index, { value: e.target.value })}
                               className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50"
                             >
                               <option value="true">Ναι</option>
@@ -320,11 +320,11 @@ export default function SegmentsPage() {
                           ) : fieldType === 'select' && fieldConfig?.options ? (
                             <select
                               value={condition.value as string}
-                              onChange={(e) => updateCondition(index, { value: e.target.value })}
+                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateCondition(index, { value: e.target.value })}
                               className="flex-1 bg-white/10 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-500/50"
                             >
                               <option value="">Επιλέξτε...</option>
-                              {fieldConfig.options.map(opt => (
+                              {fieldConfig.options.map((opt: string) => (
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
                             </select>
@@ -332,7 +332,7 @@ export default function SegmentsPage() {
                             <input
                               type={fieldType === 'number' ? 'number' : 'text'}
                               value={condition.value as string}
-                              onChange={(e) => updateCondition(index, { 
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCondition(index, { 
                                 value: e.target.value 
                               })}
                               placeholder="Τιμή..."
@@ -414,7 +414,7 @@ export default function SegmentsPage() {
         </GlassCard>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredSegments.map((segment, index) => (
+          {filteredSegments.map((segment: Segment, index: number) => (
             <motion.div
               key={segment.id}
               initial={{ opacity: 0, y: 20 }}
@@ -453,7 +453,7 @@ export default function SegmentsPage() {
                 {/* Conditions Preview */}
                 {segment.filters?.conditions && segment.filters.conditions.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-3">
-                    {segment.filters.conditions.slice(0, 3).map((cond, i) => (
+                    {segment.filters.conditions.slice(0, 3).map((cond: { field: string; operator: string; value: unknown }, i: number) => (
                       <span 
                         key={i}
                         className="text-xs px-2 py-1 bg-white/5 rounded text-white/60"
