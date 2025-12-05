@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FolderKanban, Plus, Trash2, Edit2, Search, Users, 
-  Check, X, Filter, RefreshCw, Play, Save, ChevronDown
+  FolderKanban, Plus, Trash2, Search, Users, 
+  Check, X, RefreshCw, Play
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -62,7 +62,6 @@ export default function SegmentsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [editingSegment, setEditingSegment] = useState<Segment | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [newSegment, setNewSegment] = useState({

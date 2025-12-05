@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Map as MapIcon,
   Search,
-  Filter,
   Layers,
   Navigation,
   MapPin,

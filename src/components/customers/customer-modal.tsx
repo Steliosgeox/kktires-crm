@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Save, Loader2, User, Building, Mail, Phone, MapPin, CreditCard, Tag } from 'lucide-react';
+import { Save, Loader2, User, Building, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
 import { GlassModal } from '@/components/ui/glass-modal';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassTextarea } from '@/components/ui/glass-textarea';
 import { GlassSelect } from '@/components/ui/glass-select';
-import { GlassBadge } from '@/components/ui/glass-badge';
 
 interface Customer {
   id?: string;
@@ -77,7 +76,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
     setErrors({});
   }, [customer, mode, isOpen]);
 
-  const handleChange = (field: keyof Customer, value: any) => {
+  const handleChange = (field: keyof Customer, value: string | number | boolean | null) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));

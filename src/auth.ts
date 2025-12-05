@@ -2,7 +2,6 @@ import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from '@/lib/db';
-import { accounts, sessions, users, verificationTokens } from '@/lib/db/schema';
 
 // Allowed email domains (only kktires.gr emails can sign in)
 const ALLOWED_DOMAINS = ['kktires.gr'];
@@ -14,13 +13,8 @@ const ALLOWED_EMAILS = [
 ];
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  // @ts-expect-error - Custom schema doesn't match DrizzleAdapter's expected types exactly
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  } as any),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  adapter: DrizzleAdapter(db as any),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -36,7 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user }) {
       // Check if the user's email is allowed
       const email = user.email?.toLowerCase();
       if (!email) return false;
