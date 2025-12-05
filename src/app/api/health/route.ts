@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { organizations } from '@/lib/db/schema';
 import { sql } from 'drizzle-orm';
 
 export async function GET() {
   try {
-    // Check database connectivity
-    await db.execute(sql`SELECT 1`);
+    // Check database connectivity using a simple count query
+    await db.select({ count: sql<number>`count(*)` }).from(organizations).limit(1);
 
     return NextResponse.json({
       status: 'healthy',
