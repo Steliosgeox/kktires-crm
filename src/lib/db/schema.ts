@@ -51,6 +51,7 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   name: text('name'),
+  image: text('image'), // Required by NextAuth
   avatar: text('avatar'),
   passwordHash: text('password_hash'),
   emailVerified: integer('email_verified', { mode: 'timestamp' }),
