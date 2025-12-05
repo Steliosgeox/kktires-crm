@@ -22,11 +22,11 @@ export async function GET() {
           // Build filter query
           const conditions = segment.filters.conditions.map((cond) => {
             const field = cond.field as keyof typeof customers.$inferSelect;
-            const value = cond.value;
+            const value = cond.value as string | number | boolean;
             
             switch (cond.operator) {
               case 'equals':
-                return eq(customers[field], value);
+                return eq(customers[field], value as string);
               case 'contains':
                 return like(customers[field], `%${value}%`);
               case 'startsWith':
@@ -40,9 +40,9 @@ export async function GET() {
               case 'lessOrEqual':
                 return lte(customers[field], value as number);
               case 'notEquals':
-                return ne(customers[field], value);
+                return ne(customers[field], value as string);
               default:
-                return eq(customers[field], value);
+                return eq(customers[field], value as string);
             }
           });
 
