@@ -261,10 +261,10 @@ export default function ImportPage() {
                     onChange={handleFileInput}
                     className="hidden"
                   />
-                  <GlassButton as="span">
-                    <Upload className="w-4 h-4 mr-2" />
+                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-white/[0.08] bg-white/[0.03] text-white/90 text-sm font-medium hover:bg-white/[0.05] transition-colors cursor-pointer">
+                    <Upload className="w-4 h-4" />
                     Επιλογή Αρχείου
-                  </GlassButton>
+                  </span>
                 </label>
                 
                 <div className="mt-8 text-left bg-white/5 rounded-xl p-4">
