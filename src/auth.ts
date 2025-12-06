@@ -2,19 +2,16 @@ import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from '@/lib/db';
-
-// Allowed email domains (only kktires.gr emails can sign in)
-const ALLOWED_DOMAINS = ['kktires.gr'];
-
-// Or specific email addresses
-const ALLOWED_EMAILS = [
-  'stelios@kktires.gr',
-  // Add more team members here
-];
+import { users, accounts, sessions, verificationTokens } from '@/lib/db/schema';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  adapter: DrizzleAdapter(db as any),
+  adapter: DrizzleAdapter(db as any, {
+    usersTable: users,
+    accountsTable: accounts,
+    sessionsTable: sessions,
+    verificationTokensTable: verificationTokens,
+  } as any),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -30,25 +27,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    // Allow all Google users to sign in
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async signIn({ user }: any) {
-      // Check if the user's email is allowed
-      const email = user.email?.toLowerCase();
-      if (!email) return false;
-
-      // Check if email is in allowed list
-      if (ALLOWED_EMAILS.includes(email)) {
-        return true;
-      }
-
-      // Check if email domain is allowed
-      const domain = email.split('@')[1];
-      if (ALLOWED_DOMAINS.includes(domain)) {
-        return true;
-      }
-
-      // Reject sign in
-      return false;
+      // Allow any user with a valid email
+      return !!user.email;
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async session({ session, user }: any) {

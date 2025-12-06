@@ -74,7 +74,7 @@ export function GlassModal({
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', duration: 0.3 }}
             className={cn(
-              'relative w-full rounded-xl border border-white/[0.12] bg-zinc-900/98 backdrop-blur-xl shadow-2xl overflow-hidden',
+              'relative w-full rounded-2xl border border-white/[0.12] bg-zinc-900/98 backdrop-blur-xl shadow-2xl overflow-hidden',
               {
                 'max-w-sm': size === 'sm',
                 'max-w-md': size === 'md',

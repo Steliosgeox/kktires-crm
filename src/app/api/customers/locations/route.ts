@@ -112,10 +112,9 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Sort cities by count and get top 10
+    // Sort cities by count - return ALL cities, not just top 10
     const topCities = Object.entries(cityStats)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
       .map(([name, count]) => ({ name, count }));
 
     // Calculate stats
@@ -137,4 +136,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to fetch locations' }, { status: 500 });
   }
 }
+
+
 

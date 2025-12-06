@@ -22,28 +22,36 @@ export function GlassAvatar({
 }: GlassAvatarProps) {
   const initials = getInitials(name);
 
+  // Fixed size classes - flex-shrink-0 ensures consistent sizing
   const sizeClasses = {
-    xs: 'h-6 w-6 text-[10px]',
-    sm: 'h-8 w-8 text-xs',
-    md: 'h-10 w-10 text-sm',
-    lg: 'h-12 w-12 text-base',
-    xl: 'h-16 w-16 text-lg',
+    xs: 'h-6 w-6 min-h-6 min-w-6 text-[10px]',
+    sm: 'h-8 w-8 min-h-8 min-w-8 text-xs',
+    md: 'h-10 w-10 min-h-10 min-w-10 text-sm',
+    lg: 'h-12 w-12 min-h-12 min-w-12 text-base',
+    xl: 'h-16 w-16 min-h-16 min-w-16 text-lg',
   };
 
   const bgColor = color || 'bg-gradient-to-br from-cyan-500 to-violet-500';
 
+  // Generate subtle glow shadow that matches the avatar color (reduced from 20px to 8px)
+  const glowStyle = glow && color 
+    ? { backgroundColor: color, boxShadow: `0 0 8px ${color}80` }
+    : color 
+    ? { backgroundColor: color }
+    : undefined;
+
   return (
     <div
       className={cn(
-        'relative flex items-center justify-center rounded-full font-semibold text-white overflow-hidden',
+        'relative flex-shrink-0 flex items-center justify-center rounded-full font-semibold text-white overflow-hidden',
         sizeClasses[size],
         {
-          'shadow-[0_0_20px_rgba(14,165,233,0.4)]': glow,
-          [bgColor]: !src,
+          'shadow-[0_0_8px_rgba(14,165,233,0.5)]': glow && !color,
+          [bgColor]: !src && !color,
         },
         className
       )}
-      style={color ? { backgroundColor: color } : undefined}
+      style={glowStyle}
     >
       {src ? (
         <Image

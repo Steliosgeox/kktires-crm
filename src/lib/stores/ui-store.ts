@@ -10,6 +10,7 @@ interface UIState {
   // Theme
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
+  toggleTheme: () => void;
 
   // Command Palette
   commandPaletteOpen: boolean;
@@ -52,7 +53,24 @@ export const useUIStore = create<UIState>()(
 
       // Theme - default to dark for Aurora Glass aesthetic
       theme: 'dark',
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) => {
+        set({ theme });
+        // Apply theme to document for CSS variable switching
+        if (typeof document !== 'undefined') {
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.classList.remove('light', 'dark');
+          document.documentElement.classList.add(theme);
+        }
+      },
+      toggleTheme: () => set((state) => {
+        const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+        if (typeof document !== 'undefined') {
+          document.documentElement.setAttribute('data-theme', newTheme);
+          document.documentElement.classList.remove('light', 'dark');
+          document.documentElement.classList.add(newTheme);
+        }
+        return { theme: newTheme };
+      }),
 
       // Command Palette
       commandPaletteOpen: false,
@@ -89,6 +107,8 @@ export const useUIStore = create<UIState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         theme: state.theme,
       }),
+      // Skip automatic hydration to prevent SSR mismatch
+      skipHydration: true,
     }
   )
 );

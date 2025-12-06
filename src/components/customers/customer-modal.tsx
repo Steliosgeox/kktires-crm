@@ -122,12 +122,12 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
 
   return (
     <GlassModal isOpen={isOpen} onClose={onClose} title={title} size="lg">
-      <div className="space-y-6">
-        {/* Basic Info Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-white/70">
-            <User className="h-4 w-4" />
-            <span className="text-sm font-medium">Βασικά Στοιχεία</span>
+      <div className="space-y-4 p-6">
+        {/* Basic Info Section - Glass Card */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-4">
+          <div className="flex items-center gap-2 text-cyan-400 border-b border-white/[0.06] pb-3">
+            <User className="h-5 w-5" />
+            <span className="text-sm font-semibold uppercase tracking-wide">Βασικά Στοιχεία</span>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -163,25 +163,26 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             />
           </div>
 
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex items-center gap-4 pt-2">
+            <label className="flex items-center gap-2 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={formData.isVip ?? false}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('isVip', e.target.checked)}
                 disabled={isReadOnly}
-                className="h-4 w-4 rounded border-white/20 bg-white/5 text-cyan-500"
+                className="h-5 w-5 rounded border-white/20 bg-white/5 text-amber-500 focus:ring-amber-500/50"
               />
-              <span className="text-sm text-white/70">VIP Πελάτης ⭐</span>
+              <span className="text-sm text-white/70 group-hover:text-white transition-colors">VIP Πελάτης</span>
+              <span className="text-lg">⭐</span>
             </label>
           </div>
         </div>
 
-        {/* Contact Info Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-white/70">
-            <Mail className="h-4 w-4" />
-            <span className="text-sm font-medium">Στοιχεία Επικοινωνίας</span>
+        {/* Contact Info Section - Glass Card */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-4">
+          <div className="flex items-center gap-2 text-emerald-400 border-b border-white/[0.06] pb-3">
+            <Mail className="h-5 w-5" />
+            <span className="text-sm font-semibold uppercase tracking-wide">Στοιχεία Επικοινωνίας</span>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -212,11 +213,11 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
           />
         </div>
 
-        {/* Address Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-white/70">
-            <MapPin className="h-4 w-4" />
-            <span className="text-sm font-medium">Διεύθυνση</span>
+        {/* Address Section - Glass Card */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-4">
+          <div className="flex items-center gap-2 text-violet-400 border-b border-white/[0.06] pb-3">
+            <MapPin className="h-5 w-5" />
+            <span className="text-sm font-semibold uppercase tracking-wide">Διεύθυνση</span>
           </div>
 
           <GlassInput
@@ -226,7 +227,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             disabled={isReadOnly}
           />
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <GlassInput
               label="Πόλη"
               value={formData.city || ''}
@@ -239,15 +240,14 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleChange('postalCode', e.target.value || null)}
               disabled={isReadOnly}
             />
-            <div /> {/* Spacer */}
           </div>
         </div>
 
-        {/* Tax Info Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-white/70">
-            <CreditCard className="h-4 w-4" />
-            <span className="text-sm font-medium">Φορολογικά Στοιχεία</span>
+        {/* Tax Info Section - Glass Card */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-4">
+          <div className="flex items-center gap-2 text-amber-400 border-b border-white/[0.06] pb-3">
+            <CreditCard className="h-5 w-5" />
+            <span className="text-sm font-semibold uppercase tracking-wide">Φορολογικά Στοιχεία</span>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -275,19 +275,22 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
           />
         </div>
 
-        {/* Notes Section */}
-        <div className="space-y-4">
+        {/* Notes Section - Glass Card */}
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 space-y-4">
+          <div className="flex items-center gap-2 text-pink-400 border-b border-white/[0.06] pb-3">
+            <span className="text-sm font-semibold uppercase tracking-wide">📝 Σημειώσεις</span>
+          </div>
           <GlassTextarea
-            label="Σημειώσεις"
             value={formData.notes || ''}
             onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleChange('notes', e.target.value || null)}
             disabled={isReadOnly}
             rows={3}
+            placeholder="Προσθέστε σημειώσεις για τον πελάτη..."
           />
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-white/[0.08]">
+        <div className="flex justify-end gap-3 pt-2">
           <GlassButton variant="ghost" onClick={onClose}>
             {isReadOnly ? 'Κλείσιμο' : 'Ακύρωση'}
           </GlassButton>

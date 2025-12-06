@@ -47,42 +47,47 @@ export const organizationInvitations = sqliteTable('organization_invitations', {
 // AUTHENTICATION: USERS & SESSIONS
 // ============================================
 
+// Users table - compatible with NextAuth
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
-  email: text('email').notNull().unique(),
   name: text('name'),
-  image: text('image'), // Required by NextAuth
+  email: text('email').notNull().unique(),
+  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
+  image: text('image'),
   avatar: text('avatar'),
   passwordHash: text('password_hash'),
-  emailVerified: integer('email_verified', { mode: 'timestamp' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }),
 });
 
+// Sessions table - compatible with NextAuth
 export const sessions = sqliteTable('sessions', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  sessionToken: text('sessionToken').primaryKey(),
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expires: integer('expires', { mode: 'timestamp' }).notNull(),
 });
 
+// Accounts table - compatible with NextAuth (for OAuth providers)
 export const accounts = sqliteTable('accounts', {
   id: text('id').primaryKey(),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
   provider: text('provider').notNull(),
-  providerAccountId: text('provider_account_id').notNull(),
-  accessToken: text('access_token'),
-  refreshToken: text('refresh_token'),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }),
-  tokenType: text('token_type'),
+  providerAccountId: text('providerAccountId').notNull(),
+  refresh_token: text('refresh_token'),
+  access_token: text('access_token'),
+  expires_at: integer('expires_at'),
+  token_type: text('token_type'),
   scope: text('scope'),
+  id_token: text('id_token'),
+  session_state: text('session_state'),
 });
 
+// Verification tokens - compatible with NextAuth
 export const verificationTokens = sqliteTable('verification_tokens', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull(),
+  identifier: text('identifier').notNull(),
   token: text('token').notNull().unique(),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  expires: integer('expires', { mode: 'timestamp' }).notNull(),
 });
 
 // ============================================

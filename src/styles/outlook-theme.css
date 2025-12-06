@@ -1,0 +1,370 @@
+/* Outlook-Inspired Theme System */
+/* Microsoft Fluent Design + Apple UI Philosophy */
+
+:root {
+  /* ===== LIGHT THEME (Default) ===== */
+  --outlook-bg-base: #F3F3F3;
+  --outlook-bg-panel: #FFFFFF;
+  --outlook-bg-surface: #FAFAFA;
+  --outlook-bg-hover: rgba(0, 0, 0, 0.04);
+  --outlook-bg-active: rgba(0, 120, 212, 0.08);
+  --outlook-bg-selected: rgba(0, 120, 212, 0.12);
+  
+  /* Borders */
+  --outlook-border: #E1E1E1;
+  --outlook-border-subtle: #EBEBEB;
+  --outlook-border-focus: #0078D4;
+  
+  /* Text */
+  --outlook-text-primary: #1A1A1A;
+  --outlook-text-secondary: #616161;
+  --outlook-text-tertiary: #8A8A8A;
+  --outlook-text-disabled: #A8A8A8;
+  --outlook-text-inverse: #FFFFFF;
+  
+  /* Accent Colors */
+  --outlook-accent: #0078D4;
+  --outlook-accent-hover: #106EBE;
+  --outlook-accent-pressed: #005A9E;
+  --outlook-accent-light: rgba(0, 120, 212, 0.1);
+  
+  /* Status Colors */
+  --outlook-success: #107C10;
+  --outlook-success-bg: rgba(16, 124, 16, 0.1);
+  --outlook-warning: #FFB900;
+  --outlook-warning-bg: rgba(255, 185, 0, 0.1);
+  --outlook-error: #D13438;
+  --outlook-error-bg: rgba(209, 52, 56, 0.1);
+  --outlook-info: #0078D4;
+  --outlook-info-bg: rgba(0, 120, 212, 0.1);
+  
+  /* Shadows - Light */
+  --outlook-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --outlook-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --outlook-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --outlook-shadow-focus: 0 0 0 2px rgba(0, 120, 212, 0.3);
+  
+  /* Panel Dimensions */
+  --outlook-sidebar-width: 240px;
+  --outlook-list-width: 360px;
+  --outlook-header-height: 52px;
+  --outlook-toolbar-height: 44px;
+  
+  /* Spacing */
+  --outlook-space-xs: 4px;
+  --outlook-space-sm: 8px;
+  --outlook-space-md: 12px;
+  --outlook-space-lg: 16px;
+  --outlook-space-xl: 24px;
+  --outlook-space-2xl: 32px;
+  
+  /* Border Radius */
+  --outlook-radius-sm: 4px;
+  --outlook-radius-md: 6px;
+  --outlook-radius-lg: 8px;
+  --outlook-radius-xl: 12px;
+  
+  /* Typography */
+  --outlook-font-sans: 'Segoe UI', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --outlook-font-size-xs: 11px;
+  --outlook-font-size-sm: 12px;
+  --outlook-font-size-md: 14px;
+  --outlook-font-size-lg: 16px;
+  --outlook-font-size-xl: 20px;
+  --outlook-font-size-2xl: 24px;
+  
+  /* Transitions */
+  --outlook-transition-fast: 150ms ease-out;
+  --outlook-transition-normal: 200ms ease-out;
+  --outlook-transition-slow: 250ms ease-out;
+}
+
+/* ===== DARK THEME ===== */
+[data-theme="dark"], .dark {
+  --outlook-bg-base: #0F1115;
+  --outlook-bg-panel: #1A1D21;
+  --outlook-bg-surface: #202428;
+  --outlook-bg-hover: rgba(255, 255, 255, 0.06);
+  --outlook-bg-active: rgba(53, 118, 246, 0.15);
+  --outlook-bg-selected: rgba(53, 118, 246, 0.2);
+  
+  /* Borders */
+  --outlook-border: rgba(255, 255, 255, 0.1);
+  --outlook-border-subtle: rgba(255, 255, 255, 0.06);
+  --outlook-border-focus: #3576F6;
+  
+  /* Text */
+  --outlook-text-primary: #F5F5F5;
+  --outlook-text-secondary: #A0A0A0;
+  --outlook-text-tertiary: #707070;
+  --outlook-text-disabled: #505050;
+  --outlook-text-inverse: #1A1A1A;
+  
+  /* Accent Colors */
+  --outlook-accent: #3576F6;
+  --outlook-accent-hover: #4B8AF7;
+  --outlook-accent-pressed: #2563EB;
+  --outlook-accent-light: rgba(53, 118, 246, 0.15);
+  
+  /* Status Colors - Dark adjusted */
+  --outlook-success: #4ADE80;
+  --outlook-success-bg: rgba(74, 222, 128, 0.15);
+  --outlook-warning: #FBBF24;
+  --outlook-warning-bg: rgba(251, 191, 36, 0.15);
+  --outlook-error: #F87171;
+  --outlook-error-bg: rgba(248, 113, 113, 0.15);
+  --outlook-info: #60A5FA;
+  --outlook-info-bg: rgba(96, 165, 250, 0.15);
+  
+  /* Shadows - Dark */
+  --outlook-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --outlook-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --outlook-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --outlook-shadow-focus: 0 0 0 2px rgba(53, 118, 246, 0.4);
+}
+
+/* ===== BASE STYLES ===== */
+.outlook-app {
+  font-family: var(--outlook-font-sans);
+  font-size: var(--outlook-font-size-md);
+  color: var(--outlook-text-primary);
+  background: var(--outlook-bg-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== PANEL STYLES ===== */
+.outlook-panel {
+  background: var(--outlook-bg-panel);
+  border-right: 1px solid var(--outlook-border);
+}
+
+.outlook-panel-header {
+  height: var(--outlook-header-height);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--outlook-space-lg);
+  border-bottom: 1px solid var(--outlook-border);
+}
+
+/* ===== BUTTON STYLES ===== */
+.outlook-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--outlook-space-sm);
+  padding: var(--outlook-space-sm) var(--outlook-space-lg);
+  font-size: var(--outlook-font-size-md);
+  font-weight: 500;
+  border-radius: var(--outlook-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--outlook-transition-fast);
+  outline: none;
+}
+
+.outlook-btn:focus-visible {
+  box-shadow: var(--outlook-shadow-focus);
+}
+
+.outlook-btn-primary {
+  background: var(--outlook-accent);
+  color: var(--outlook-text-inverse);
+}
+
+.outlook-btn-primary:hover {
+  background: var(--outlook-accent-hover);
+}
+
+.outlook-btn-primary:active {
+  background: var(--outlook-accent-pressed);
+  transform: scale(0.98);
+}
+
+.outlook-btn-secondary {
+  background: transparent;
+  color: var(--outlook-text-primary);
+  border-color: var(--outlook-border);
+}
+
+.outlook-btn-secondary:hover {
+  background: var(--outlook-bg-hover);
+}
+
+.outlook-btn-ghost {
+  background: transparent;
+  color: var(--outlook-text-secondary);
+}
+
+.outlook-btn-ghost:hover {
+  background: var(--outlook-bg-hover);
+  color: var(--outlook-text-primary);
+}
+
+/* ===== INPUT STYLES ===== */
+.outlook-input {
+  width: 100%;
+  padding: var(--outlook-space-sm) var(--outlook-space-md);
+  font-size: var(--outlook-font-size-md);
+  color: var(--outlook-text-primary);
+  background: var(--outlook-bg-surface);
+  border: 1px solid var(--outlook-border);
+  border-radius: var(--outlook-radius-md);
+  outline: none;
+  transition: all var(--outlook-transition-fast);
+}
+
+.outlook-input:focus {
+  border-color: var(--outlook-accent);
+  border-width: 2px;
+  padding: calc(var(--outlook-space-sm) - 1px) calc(var(--outlook-space-md) - 1px);
+  box-shadow: var(--outlook-shadow-focus);
+}
+
+.outlook-input::placeholder {
+  color: var(--outlook-text-tertiary);
+}
+
+/* ===== LIST ITEM STYLES ===== */
+.outlook-list-item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--outlook-space-md) var(--outlook-space-lg);
+  border-bottom: 1px solid var(--outlook-border-subtle);
+  cursor: pointer;
+  transition: background var(--outlook-transition-fast);
+}
+
+.outlook-list-item:hover {
+  background: var(--outlook-bg-hover);
+}
+
+.outlook-list-item.selected {
+  background: var(--outlook-bg-selected);
+  border-left: 3px solid var(--outlook-accent);
+  padding-left: calc(var(--outlook-space-lg) - 3px);
+}
+
+/* ===== PILL/BADGE STYLES ===== */
+.outlook-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--outlook-space-sm);
+  font-size: var(--outlook-font-size-xs);
+  font-weight: 500;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.outlook-pill-draft {
+  background: var(--outlook-bg-hover);
+  color: var(--outlook-text-secondary);
+}
+
+.outlook-pill-sent {
+  background: var(--outlook-success-bg);
+  color: var(--outlook-success);
+}
+
+.outlook-pill-scheduled {
+  background: var(--outlook-warning-bg);
+  color: var(--outlook-warning);
+}
+
+.outlook-pill-failed {
+  background: var(--outlook-error-bg);
+  color: var(--outlook-error);
+}
+
+/* ===== SCROLLBAR STYLES ===== */
+.outlook-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.outlook-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.outlook-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--outlook-border);
+  border-radius: 4px;
+}
+
+.outlook-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--outlook-text-tertiary);
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes outlook-slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes outlook-slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes outlook-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes outlook-scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.outlook-animate-slide-right {
+  animation: outlook-slide-in-right var(--outlook-transition-slow) forwards;
+}
+
+.outlook-animate-slide-left {
+  animation: outlook-slide-in-left var(--outlook-transition-slow) forwards;
+}
+
+.outlook-animate-fade {
+  animation: outlook-fade-in var(--outlook-transition-normal) forwards;
+}
+
+.outlook-animate-scale {
+  animation: outlook-scale-in var(--outlook-transition-normal) forwards;
+}
+
+/* ===== FROSTED GLASS EFFECT ===== */
+.outlook-frosted {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* ===== FOCUS VISIBLE ===== */
+.outlook-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--outlook-shadow-focus);
+}
+

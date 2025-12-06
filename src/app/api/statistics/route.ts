@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { unstable_cache } from 'next/cache';
 import { db } from '@/lib/db';
 import { customers, leads } from '@/lib/db/schema';
 import { eq, sql, and, gte } from 'drizzle-orm';
 
 const DEFAULT_ORG_ID = 'org_kktires';
 
-// Cache statistics for 60 seconds
-const getStatistics = unstable_cache(
-  async () => {
+// Direct function without cache (cache was causing stale zero results)
+async function getStatistics() {
+    console.log('📊 getStatistics called - querying database...');
+    
     // Run queries in parallel for better performance
     const [
       customerCount,
@@ -88,7 +88,9 @@ const getStatistics = unstable_cache(
         )),
     ]);
 
-    // Get new customers this month (not cached as it changes daily)
+    console.log('📊 Query results - customers:', customerCount[0]?.count, 'leads:', leadCount[0]?.count);
+
+    // Get new customers this month
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
@@ -123,17 +125,17 @@ const getStatistics = unstable_cache(
       })),
       topCustomers,
     };
-  },
-  ['statistics-data'],
-  { revalidate: 60, tags: ['statistics'] }
-);
+}
 
 export async function GET() {
+  console.log('📊 Statistics API GET called');
+  
   try {
     const data = await getStatistics();
+    console.log('📊 Returning data - customers:', data.overview.totalCustomers);
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching statistics:', error);
+    console.error('❌ Error fetching statistics:', error);
     return NextResponse.json(
       { error: 'Failed to fetch statistics' },
       { status: 500 }

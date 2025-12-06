@@ -142,6 +142,10 @@ export default function DashboardPage() {
 
   async function fetchDashboardData() {
     setLoading(true);
+    // #region agent log
+    const fetchStart = Date.now();
+    fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard/page.tsx:fetchDashboardData:start',message:'Starting dashboard fetch',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
     try {
       // Fetch statistics and tasks in parallel
       const [statsRes, tasksRes] = await Promise.all([
@@ -149,8 +153,15 @@ export default function DashboardPage() {
         fetch('/api/tasks?limit=5'),
       ]);
 
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard/page.tsx:fetchDashboardData:afterFetch',message:'API responses received',data:{statsOk:statsRes.ok,tasksOk:tasksRes.ok,durationMs:Date.now()-fetchStart},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
+
       if (statsRes.ok) {
         const statsData = await statsRes.json();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard/page.tsx:fetchDashboardData:statsData',message:'Stats data received',data:{totalCustomers:statsData?.overview?.totalCustomers,totalRevenue:statsData?.overview?.totalRevenue},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
         setStats(statsData);
       }
 
@@ -159,6 +170,9 @@ export default function DashboardPage() {
         setTasks(tasksData.tasks || []);
       }
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'dashboard/page.tsx:fetchDashboardData:error',message:'Fetch error',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       console.error('Failed to fetch dashboard data:', error);
     } finally {
       setLoading(false);

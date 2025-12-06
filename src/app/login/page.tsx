@@ -101,7 +101,7 @@ function LoginContent() {
 
           {/* Info */}
           <p className="mt-6 text-center text-white/40 text-sm">
-            Μόνο εξουσιοδοτημένοι χρήστες @kktires.gr
+            Συνδεθείτε με τον Google λογαριασμό σας
           </p>
         </div>
 
@@ -125,4 +125,6 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+
+
 

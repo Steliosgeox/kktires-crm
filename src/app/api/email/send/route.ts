@@ -22,14 +22,14 @@ async function getGmailAccessToken(userId: string): Promise<string | null> {
     ),
   });
 
-  if (!account?.accessToken) {
+  if (!account?.access_token) {
     return null;
   }
 
   // Check if token is expired and refresh if needed
-  if (account.expiresAt && account.expiresAt.getTime() < Date.now()) {
+  if (account.expires_at && account.expires_at * 1000 < Date.now()) {
     // Token is expired, try to refresh
-    if (!account.refreshToken) {
+    if (!account.refresh_token) {
       return null;
     }
 
@@ -41,7 +41,7 @@ async function getGmailAccessToken(userId: string): Promise<string | null> {
           client_id: process.env.GOOGLE_CLIENT_ID!,
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           grant_type: 'refresh_token',
-          refresh_token: account.refreshToken,
+          refresh_token: account.refresh_token,
         }),
       });
 
@@ -56,19 +56,19 @@ async function getGmailAccessToken(userId: string): Promise<string | null> {
       await db
         .update(accounts)
         .set({
-          accessToken: tokens.accessToken,
-          expiresAt: new Date(Date.now() + tokens.expires_in * 1000),
+          access_token: tokens.access_token,
+          expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
         })
         .where(eq(accounts.id, account.id));
 
-      return tokens.accessToken;
+      return tokens.access_token;
     } catch (error) {
       console.error('Failed to refresh token:', error);
       return null;
     }
   }
 
-  return account.accessToken;
+  return account.access_token;
 }
 
 async function sendGmailEmail(accessToken: string, email: EmailPayload): Promise<boolean> {

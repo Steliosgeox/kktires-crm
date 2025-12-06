@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search,
@@ -90,11 +90,18 @@ export default function CustomersPage() {
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchCustomers = useCallback(async () => {
+  // Use ref to track current pagination values for stable callback
+  const paginationRef = useRef(pagination);
+  paginationRef.current = pagination;
+
+  const fetchCustomers = useCallback(async (page?: number, limit?: number) => {
+    const currentPage = page ?? paginationRef.current.page;
+    const currentLimit = limit ?? paginationRef.current.limit;
+    
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/customers?page=${pagination.page}&limit=${pagination.limit}`);
+      const response = await fetch(`/api/customers?page=${currentPage}&limit=${currentLimit}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch customers');
@@ -102,10 +109,16 @@ export default function CustomersPage() {
       
       const data = await response.json();
       setCustomers(data.customers || []);
+      
+      // Update pagination totals without triggering re-fetch
+      const total = data.pagination?.total || data.total || 0;
+      const totalPages = data.pagination?.totalPages || Math.ceil(total / currentLimit);
       setPagination(prev => ({
         ...prev,
-        total: data.pagination?.total || data.total || 0,
-        totalPages: data.pagination?.totalPages || Math.ceil((data.total || 0) / prev.limit),
+        page: currentPage,
+        limit: currentLimit,
+        total,
+        totalPages,
       }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Σφάλμα φόρτωσης πελατών');
@@ -113,11 +126,17 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit]);
+  }, []);
 
+  // Initial fetch only
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
+
+  // Handle pagination changes
+  const handlePageChange = useCallback((newPage: number) => {
+    fetchCustomers(newPage, pagination.limit);
+  }, [fetchCustomers, pagination.limit]);
 
   // Clear selection when page changes
   useEffect(() => {
@@ -205,9 +224,10 @@ export default function CustomersPage() {
     router.push('/import');
   };
 
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setPagination(prev => ({ ...prev, limit: parseInt(e.target.value), page: 1 }));
-  };
+  const handlePageSizeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLimit = parseInt(e.target.value);
+    fetchCustomers(1, newLimit);
+  }, [fetchCustomers]);
 
   const filteredCustomers = customers.filter((customer) => {
     if (!searchQuery) return true;
@@ -300,7 +320,7 @@ export default function CustomersPage() {
           <GlassButton 
             variant="default" 
             leftIcon={<RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />}
-            onClick={fetchCustomers}
+            onClick={() => fetchCustomers()}
             disabled={loading}
           >
             Ανανέωση
@@ -322,7 +342,7 @@ export default function CustomersPage() {
         <GlassCard className="border-red-500/30 bg-red-500/10">
           <div className="flex items-center justify-between">
             <p className="text-red-400">{error}</p>
-            <GlassButton size="sm" onClick={fetchCustomers}>
+            <GlassButton size="sm" onClick={() => fetchCustomers()}>
               Δοκιμή Ξανά
             </GlassButton>
           </div>
@@ -397,7 +417,7 @@ export default function CustomersPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full" role="table" aria-label="Λίστα πελατών">
               <thead>
                 <tr className="border-b border-white/[0.08]">
                   <th className="px-4 py-4 text-left">
@@ -572,8 +592,8 @@ export default function CustomersPage() {
             <GlassButton 
               variant="default" 
               size="sm" 
-              disabled={pagination.page <= 1}
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => handlePageChange(pagination.page - 1)}
               leftIcon={<ChevronLeft className="h-4 w-4" />}
             >
               Προηγούμενο
@@ -593,12 +613,14 @@ export default function CustomersPage() {
                 return (
                   <button
                     key={pageNum}
-                    onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                    onClick={() => handlePageChange(pageNum)}
+                    disabled={loading}
                     className={cn(
                       'h-8 w-8 rounded-md text-sm font-medium transition-colors',
                       pagination.page === pageNum
                         ? 'bg-cyan-500 text-white'
-                        : 'text-white/60 hover:bg-white/[0.05] hover:text-white'
+                        : 'text-white/60 hover:bg-white/[0.05] hover:text-white',
+                      loading && 'opacity-50 cursor-not-allowed'
                     )}
                   >
                     {pageNum}
@@ -609,8 +631,8 @@ export default function CustomersPage() {
             <GlassButton 
               variant="default" 
               size="sm" 
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+              disabled={pagination.page >= pagination.totalPages || loading}
+              onClick={() => handlePageChange(pagination.page + 1)}
               rightIcon={<ChevronRight className="h-4 w-4" />}
             >
               Επόμενο

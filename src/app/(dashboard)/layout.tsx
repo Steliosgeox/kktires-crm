@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/header';
 import { AuroraBackground } from '@/components/layout/aurora-background';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { GlassToastContainer } from '@/components/ui/glass-toast';
+import { StoreHydration } from '@/components/providers/store-hydration';
 import { useUIStore } from '@/lib/stores/ui-store';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +43,7 @@ export default function DashboardLayout({
       {/* Global Components */}
       <CommandPalette />
       <GlassToastContainer />
+      <StoreHydration />
     </div>
   );
 }
