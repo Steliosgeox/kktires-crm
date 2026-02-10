@@ -267,15 +267,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   debug: process.env.NODE_ENV !== 'production' || process.env.AUTH_DEBUG === '1',
   logger: {
-    error(code, metadata) {
-      console.error('[auth] error', code, metadata);
+    error(error) {
+      console.error('[auth] error', error);
     },
     warn(code) {
       console.warn('[auth] warn', code);
     },
-    debug(code, metadata) {
+    debug(message, metadata) {
       if (process.env.AUTH_DEBUG === '1') {
-        console.log('[auth] debug', code, metadata);
+        console.log('[auth] debug', message, metadata);
       }
     },
   },
