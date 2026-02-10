@@ -2,8 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/email-jobs",
-      "schedule": "*/1 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
-
