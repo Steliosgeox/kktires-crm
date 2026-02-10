@@ -37,9 +37,13 @@ export function isSmtpConfigured(): boolean {
   return !!getSmtpConfig();
 }
 
-let transport: nodemailer.Transporter | null = null;
+// Avoid depending on nodemailer type declarations during builds (some CI setups omit devDependencies).
+// Runtime is still nodemailer; this is only about TS types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let transport: any = null;
 
-function getTransport(): nodemailer.Transporter {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getTransport(): any {
   if (transport) return transport;
   const cfg = getSmtpConfig();
   if (!cfg) {
@@ -85,4 +89,3 @@ export async function sendSmtpEmail(params: {
     return false;
   }
 }
-
