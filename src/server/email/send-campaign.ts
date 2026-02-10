@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { selectRecipients } from './recipients';
 import { getGmailAccessToken, sendGmailEmail } from './gmail';
+import { isSmtpConfigured, sendSmtpEmail } from './smtp';
 import {
   appendUnsubscribeFooter,
   buildOpenPixelUrl,
@@ -46,8 +47,13 @@ export async function sendCampaignNow(params: { orgId: string; userId: string; c
     return { ok: false as const, status: 409, error: 'Campaign is already sent' };
   }
 
-  const accessToken = await getGmailAccessToken(userId);
-  if (!accessToken) {
+  const useSmtp =
+    isSmtpConfigured() &&
+    !!campaign.fromEmail &&
+    !String(campaign.fromEmail).toLowerCase().endsWith('@gmail.com');
+
+  const accessToken = useSmtp ? null : await getGmailAccessToken(userId);
+  if (!useSmtp && !accessToken) {
     return { ok: false as const, status: 403, error: 'Gmail not connected' };
   }
 
@@ -136,13 +142,21 @@ export async function sendCampaignNow(params: { orgId: string; userId: string; c
           headers['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
         }
 
-        const ok = await sendGmailEmail(accessToken, {
-          to: r.email,
-          subject,
-          body: content,
-          html: true,
-          headers,
-        });
+        const ok = useSmtp
+          ? await sendSmtpEmail({
+              to: r.email,
+              subject,
+              html: content,
+              headers,
+              from: campaign.fromEmail || undefined,
+            })
+          : await sendGmailEmail(accessToken as string, {
+              to: r.email,
+              subject,
+              body: content,
+              html: true,
+              headers,
+            });
 
         await db
           .update(campaignRecipients)

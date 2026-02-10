@@ -1,11 +1,71 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
+import Nodemailer from 'next-auth/providers/nodemailer';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db } from '@/lib/db';
 import { accounts, organizationMembers, organizations, sessions, users, verificationTokens } from '@/lib/db/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { encryptAccountTokens } from '@/server/crypto/oauth-tokens';
+
+function getAuthSecret(): string | undefined {
+  const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  return secret?.trim() ? secret : undefined;
+}
+
+function getTrustHost(): boolean {
+  // Auth.js / NextAuth behind a proxy (like Vercel) needs trustHost unless NEXTAUTH_URL is set correctly.
+  // This makes local + Vercel behave without needing extra flags.
+  return process.env.VERCEL === '1' || process.env.NODE_ENV !== 'production';
+}
+
+function getGoogleProvider() {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+
+  return Google({
+    clientId,
+    clientSecret,
+    authorization: {
+      params: {
+        prompt: 'consent',
+        access_type: 'offline',
+        response_type: 'code',
+        scope: 'openid email profile https://www.googleapis.com/auth/gmail.send',
+      },
+    },
+  });
+}
+
+function getNodemailerProvider() {
+  const host = process.env.SMTP_HOST?.trim();
+  const portRaw = process.env.SMTP_PORT?.trim();
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const from = (process.env.SMTP_FROM || user || '').trim();
+  if (!host || !portRaw || !user || !pass || !from) return null;
+
+  const port = Number.parseInt(portRaw, 10);
+  if (!Number.isFinite(port) || port <= 0) return null;
+
+  const secureRaw = (process.env.SMTP_SECURE || '').trim().toLowerCase();
+  const secure =
+    secureRaw === 'true' ||
+    secureRaw === '1' ||
+    port === 465;
+
+  // Provider id is "nodemailer". We'll use it explicitly in the login page.
+  return Nodemailer({
+    server: {
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    },
+    from,
+  });
+}
 
 function normalizeEmail(email: string | null | undefined): string | null {
   if (!email) return null;
@@ -31,6 +91,8 @@ function getDefaultOrgId(): string {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  secret: getAuthSecret(),
+  trustHost: getTrustHost(),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   adapter: (() => {
     // Wrap the adapter so OAuth tokens are encrypted at rest when configured.
@@ -50,20 +112,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     } as any;
   })(),
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: {
-        params: {
-          prompt: 'consent',
-          access_type: 'offline',
-          response_type: 'code',
-          scope: 'openid email profile https://www.googleapis.com/auth/gmail.send',
-        },
-      },
-    }),
-  ],
+  providers: (() => {
+    const providers = [];
+    const google = getGoogleProvider();
+    if (google) providers.push(google);
+    const mail = getNodemailerProvider();
+    if (mail) providers.push(mail);
+    return providers;
+  })(),
   events: {
     // Ensure the default org exists and the user is a member after successful sign-in.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,5 +208,5 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
     strategy: 'database',
   },
-  debug: process.env.NODE_ENV === 'development',
+  debug: process.env.NODE_ENV !== 'production',
 }); 

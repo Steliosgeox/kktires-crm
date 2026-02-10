@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { claimNextDueEmailJob, markEmailJobCompleted, markEmailJobFailed, yieldEmailJob } from './job-queue';
 import { selectRecipients } from './recipients';
 import { getGmailAccessToken, sendGmailEmail } from './gmail';
+import { isSmtpConfigured, sendSmtpEmail } from './smtp';
 import {
   appendUnsubscribeFooter,
   buildOpenPixelUrl,
@@ -266,8 +267,17 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
     return { ok: true as const, sent: 0, failed: 0, processed: 0, done: true };
   }
 
-  const accessToken = await getGmailAccessToken(job.senderUserId);
-  if (!accessToken) {
+  // Sending strategy:
+  // - If SMTP is configured and the campaign is set to send from a non-Gmail mailbox (e.g. info@kktires.gr),
+  //   use SMTP (Roundcube/webmail accounts usually expose SMTP).
+  // - Otherwise, default to Gmail API using the logged-in user's connected Google account.
+  const useSmtp =
+    isSmtpConfigured() &&
+    !!campaign.fromEmail &&
+    !String(campaign.fromEmail).toLowerCase().endsWith('@gmail.com');
+
+  const accessToken = useSmtp ? null : await getGmailAccessToken(job.senderUserId);
+  if (!useSmtp && !accessToken) {
     await markEmailJobFailed(job.id, 'Gmail not connected');
     await db
       .update(emailCampaigns)
@@ -394,13 +404,21 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
             headers['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
           }
 
-          const ok = await sendGmailEmail(accessToken, {
-            to: item.recipientEmail,
-            subject,
-            body: content,
-            html: true,
-            headers,
-          });
+          const ok = useSmtp
+            ? await sendSmtpEmail({
+                to: item.recipientEmail,
+                subject,
+                html: content,
+                headers,
+                from: campaign.fromEmail || undefined,
+              })
+            : await sendGmailEmail(accessToken as string, {
+                to: item.recipientEmail,
+                subject,
+                body: content,
+                html: true,
+                headers,
+              });
 
           await db
             .update(campaignRecipients)

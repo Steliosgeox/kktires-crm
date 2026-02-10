@@ -4,7 +4,7 @@ This is a Next.js App Router CRM with an Outlook-style email/campaign UI. The ba
 
 - **Auth**: NextAuth v5 (Google OAuth)
 - **DB**: Drizzle ORM + SQLite/libSQL (Turso recommended for production)
-- **Email sending**: Gmail API (`gmail.send`) via each logged-in user’s connected Google account
+- **Email sending**: Gmail API (`gmail.send`) and/or SMTP (for non-Gmail mailboxes like Roundcube)
 - **Background sending**: **Vercel Cron** + DB-backed job queue (no long-running worker)
 
 ## Local Development
@@ -27,6 +27,7 @@ Set these in Vercel Project Settings:
 - `NEXTAUTH_SECRET`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
+- (Optional, for Roundcube/webmail login + sending) `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
 - `AUTH_ALLOWED_EMAILS` (comma-separated allowlist; non-allowlisted users are denied at sign-in)
 - `EMAIL_TRACKING_SECRET` (signs tracking links/pixels)
 - `OAUTH_TOKEN_ENCRYPTION_KEY` (base64-encoded 32 bytes; encrypts OAuth tokens at rest)
@@ -57,4 +58,3 @@ Optional protection:
 - Vercel’s filesystem is ephemeral: do not use `file:./something.db` in production.
 - Tracking URLs require a correct `NEXTAUTH_URL` so links/pixels point at the deployed domain.
 - If `OAUTH_TOKEN_ENCRYPTION_KEY` changes, previously stored encrypted tokens cannot be decrypted.
-

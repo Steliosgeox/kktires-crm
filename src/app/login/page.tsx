@@ -4,11 +4,13 @@ import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
   const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const [email, setEmail] = useState('');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#14151a] to-[#1a1b23]">
@@ -60,7 +62,21 @@ function LoginContent() {
                   Υπήρξε πρόβλημα με την σύνδεση Google. Δοκιμάστε ξανά.
                 </>
               )}
-              {!['AccessDenied', 'OAuthCallback'].includes(error) && (
+              {error === 'Configuration' && (
+                <>
+                  <strong className="block mb-1">Σφάλμα ρυθμίσεων</strong>
+                  Λείπουν ή είναι λάθος οι μεταβλητές περιβάλλοντος στο Vercel (DB/NextAuth/Google OAuth).
+                  Ελέγξτε πρώτα το <code className="px-1 rounded bg-white/10">/api/health</code> και μετά τις
+                  μεταβλητές: <code className="px-1 rounded bg-white/10">DATABASE_URL</code>,{' '}
+                  <code className="px-1 rounded bg-white/10">DATABASE_AUTH_TOKEN</code>,{' '}
+                  <code className="px-1 rounded bg-white/10">NEXTAUTH_URL</code>,{' '}
+                  <code className="px-1 rounded bg-white/10">NEXTAUTH_SECRET</code>,{' '}
+                  <code className="px-1 rounded bg-white/10">GOOGLE_CLIENT_ID</code>,{' '}
+                  <code className="px-1 rounded bg-white/10">GOOGLE_CLIENT_SECRET</code>,{' '}
+                  <code className="px-1 rounded bg-white/10">AUTH_ALLOWED_EMAILS</code>.
+                </>
+              )}
+              {!['AccessDenied', 'OAuthCallback', 'Configuration'].includes(error) && (
                 <>
                   <strong className="block mb-1">Σφάλμα</strong>
                   {error}
@@ -98,6 +114,28 @@ function LoginContent() {
             </svg>
             Σύνδεση με Google
           </motion.button>
+
+          {/* Email Link Sign In (for non-Gmail mailboxes like Roundcube) */}
+          <div className="mt-6 space-y-3">
+            <div className="text-xs text-white/50">
+              Εναλλακτικά, συνδεθείτε με email (θα λάβετε link σύνδεσης).
+            </div>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="info@kktires.gr"
+              type="email"
+              autoComplete="email"
+              className="w-full px-4 py-3 rounded-lg bg-white/[0.06] border border-white/[0.10] text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-cyan-500/50"
+            />
+            <button
+              onClick={() => signIn('nodemailer', { email: email.trim(), callbackUrl })}
+              disabled={!email.trim()}
+              className="w-full px-6 py-3 rounded-lg bg-cyan-500/20 border border-cyan-400/30 text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              Στείλε μου link σύνδεσης
+            </button>
+          </div>
 
           {/* Info */}
           <p className="mt-6 text-center text-white/40 text-sm">
