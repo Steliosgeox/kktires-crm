@@ -4,7 +4,7 @@
  */
 
 const HUGGINGFACE_API = 'https://api-inference.huggingface.co/models/ilsp/Meltemi-7B-v1';
-const API_KEY = process.env.HUGGINGFACE_API_KEY || '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';
+const API_KEY = process.env.HUGGINGFACE_API_KEY;
 
 export interface CustomerContext {
   firstName: string;
@@ -27,7 +27,7 @@ export async function expandToGreekEmail(
   customer: CustomerContext
 ): Promise<MeltemiResponse> {
   const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(' ');
-  
+
   const prompt = `Είσαι επαγγελματίας copywriter για ελληνική επιχείρηση ελαστικών.
 Μετάτρεψε αυτή τη σύντομη σημείωση σε πλήρες επαγγελματικό email στα Ελληνικά.
 
@@ -63,7 +63,7 @@ Email:`;
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      
+
       // Handle model loading
       if (response.status === 503) {
         return {
@@ -71,7 +71,7 @@ Email:`;
           error: 'Το μοντέλο φορτώνει. Παρακαλώ δοκιμάστε ξανά σε λίγα δευτερόλεπτα.',
         };
       }
-      
+
       return {
         success: false,
         error: errorData.error || `API Error: ${response.status}`,
@@ -79,7 +79,7 @@ Email:`;
     }
 
     const result = await response.json();
-    
+
     // Extract generated text
     let generatedText = '';
     if (Array.isArray(result) && result[0]?.generated_text) {
@@ -147,8 +147,8 @@ ${emailContent.slice(0, 500)}
     }
 
     const result = await response.json();
-    const generatedText = Array.isArray(result) 
-      ? result[0]?.generated_text 
+    const generatedText = Array.isArray(result)
+      ? result[0]?.generated_text
       : result.generated_text;
 
     return {

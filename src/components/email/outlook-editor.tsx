@@ -66,6 +66,7 @@ interface OutlookEditorProps {
   selectedSignature: string | null;
   setSelectedSignature: (id: string | null) => void;
   onSave: (sendNow: boolean) => void;
+  onSchedule: (runAtIso: string) => void;
   onCancel: () => void;
   onOpenRecipients: () => void;
   saving: boolean;
@@ -98,6 +99,7 @@ export function OutlookEditor({
   selectedSignature,
   setSelectedSignature,
   onSave,
+  onSchedule,
   onCancel,
   onOpenRecipients,
   saving,
@@ -116,10 +118,8 @@ export function OutlookEditor({
   const [scheduleTime, setScheduleTime] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const totalRecipients = recipientCount || 0;
-  const hasRecipients = recipientFilters.cities.length > 0 ||
-                        recipientFilters.tags.length > 0 ||
-                        recipientFilters.segments.length > 0;
+  const totalRecipients = recipientCount ?? 0;
+  const hasRecipients = totalRecipients > 0;
 
   // Initialize editor content only once
   useEffect(() => {
@@ -343,13 +343,26 @@ export function OutlookEditor({
             </div>
             <button
               onClick={() => {
-                // TODO: Implement scheduling
+                if (!scheduleDate || !scheduleTime) {
+                  alert('Επιλέξτε ημερομηνία και ώρα');
+                  return;
+                }
+
+                const dt = new Date(`${scheduleDate}T${scheduleTime}:00`);
+                if (isNaN(dt.getTime())) {
+                  alert('Μη έγκυρη ημερομηνία/ώρα');
+                  return;
+                }
+
+                onSchedule(dt.toISOString());
                 setShowSchedule(false);
               }}
+              disabled={saving || sending || !hasRecipients}
               className="px-4 py-2 text-sm rounded-md"
               style={{
                 background: 'var(--outlook-accent)',
                 color: 'white',
+                opacity: (saving || sending || !hasRecipients) ? 0.6 : 1,
               }}
             >
               Προγραμματισμός

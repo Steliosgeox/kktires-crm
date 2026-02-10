@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { customers } from '@/lib/db/schema';
-import { eq, sql, isNotNull, and } from 'drizzle-orm';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { eq } from 'drizzle-orm';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 // Greek city coordinates for geocoding fallback
 const GREEK_CITY_COORDS: Record<string, { lat: number; lng: number }> = {
@@ -43,15 +42,26 @@ function getCoordsForCity(city: string): { lat: number; lng: number } | null {
     }
   }
   
-  // Default to Athens area with random offset for unknown cities
-  return {
-    lat: 37.9838 + (Math.random() - 0.5) * 0.5,
-    lng: 23.7275 + (Math.random() - 0.5) * 0.5,
-  };
+  return null;
+}
+
+function stableJitter(seed: string, magnitude: number): number {
+  // Deterministic "random" in [-magnitude, +magnitude] to avoid per-request jitter.
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const u = (h >>> 0) / 0xffffffff; // [0, 1]
+  return (u - 0.5) * 2 * magnitude;
 }
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { searchParams } = new URL(request.url);
     const city = searchParams.get('city');
 
@@ -72,7 +82,7 @@ export async function GET(request: NextRequest) {
         longitude: customers.longitude,
       })
       .from(customers)
-      .where(eq(customers.orgId, DEFAULT_ORG_ID));
+      .where(eq(customers.orgId, orgId));
 
     const allCustomers = await query;
 
@@ -85,8 +95,8 @@ export async function GET(request: NextRequest) {
       if ((!lat || !lng) && customer.city) {
         const coords = getCoordsForCity(customer.city);
         if (coords) {
-          lat = coords.lat + (Math.random() - 0.5) * 0.02; // Add small random offset
-          lng = coords.lng + (Math.random() - 0.5) * 0.02;
+          lat = coords.lat + stableJitter(`${customer.id}:lat`, 0.02);
+          lng = coords.lng + stableJitter(`${customer.id}:lng`, 0.02);
         }
       }
 

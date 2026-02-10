@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, tags, customerTags } from '@/lib/db';
-import { eq, count } from 'drizzle-orm';
+import { db, tags, customerTags, customers } from '@/lib/db';
+import { and, eq, count, sql } from 'drizzle-orm';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 // GET /api/tags/:id - Get single tag with customer count
 export async function GET(
@@ -8,10 +9,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     
     const tag = await db.query.tags.findFirst({
-      where: eq(tags.id, id),
+      where: and(eq(tags.id, id), eq(tags.orgId, orgId)),
     });
 
     if (!tag) {
@@ -20,9 +25,10 @@ export async function GET(
 
     // Get customer count
     const [customerCountResult] = await db
-      .select({ count: count() })
+      .select({ count: sql<number>`count(DISTINCT ${customers.id})` })
       .from(customerTags)
-      .where(eq(customerTags.tagId, id));
+      .innerJoin(customers, eq(customerTags.customerId, customers.id))
+      .where(and(eq(customerTags.tagId, id), eq(customers.orgId, orgId)));
 
     return NextResponse.json({
       tag: {
@@ -42,11 +48,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     const body = await request.json();
 
     const existing = await db.query.tags.findFirst({
-      where: eq(tags.id, id),
+      where: and(eq(tags.id, id), eq(tags.orgId, orgId)),
     });
 
     if (!existing) {
@@ -60,7 +70,7 @@ export async function PUT(
         color: body.color || existing.color,
         description: body.description !== undefined ? body.description : existing.description,
       })
-      .where(eq(tags.id, id))
+      .where(and(eq(tags.id, id), eq(tags.orgId, orgId)))
       .returning();
 
     return NextResponse.json({ tag: updatedTag });
@@ -76,10 +86,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
 
     // This will also delete related customerTags due to cascade
-    await db.delete(tags).where(eq(tags.id, id));
+    await db.delete(tags).where(and(eq(tags.id, id), eq(tags.orgId, orgId)));
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { customers, customerTags, tags } from '@/lib/db/schema';
-import { eq, desc, like, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, like, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-// Default org ID for now (will be replaced with auth)
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const category = searchParams.get('category');
@@ -17,8 +19,32 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
-    // Build query conditions
-    let query = db
+    const whereParts: any[] = [eq(customers.orgId, orgId)];
+
+    if (search.trim()) {
+      const s = `%${search.trim()}%`;
+      whereParts.push(
+        or(
+          like(customers.firstName, s),
+          like(customers.lastName, s),
+          like(customers.company, s),
+          like(customers.email, s),
+          like(customers.phone, s),
+          like(customers.mobile, s),
+          like(customers.afm, s)
+        )
+      );
+    }
+
+    if (category) {
+      whereParts.push(eq(customers.category, category));
+    }
+
+    if (city) {
+      whereParts.push(like(customers.city, `%${city}%`));
+    }
+
+    const query = db
       .select({
         id: customers.id,
         firstName: customers.firstName,
@@ -36,7 +62,7 @@ export async function GET(request: NextRequest) {
         updatedAt: customers.updatedAt,
       })
       .from(customers)
-      .where(eq(customers.orgId, DEFAULT_ORG_ID))
+      .where(and(...whereParts))
       .orderBy(desc(customers.createdAt))
       .limit(limit)
       .offset(offset);
@@ -47,7 +73,7 @@ export async function GET(request: NextRequest) {
     const countResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(customers)
-      .where(eq(customers.orgId, DEFAULT_ORG_ID));
+      .where(and(...whereParts));
     
     const total = countResult[0]?.count || 0;
 
@@ -63,7 +89,7 @@ export async function GET(request: NextRequest) {
           })
           .from(customerTags)
           .innerJoin(tags, eq(customerTags.tagId, tags.id))
-          .where(sql`${customerTags.customerId} IN ${customerIds}`)
+          .where(and(eq(tags.orgId, orgId), inArray(customerTags.customerId, customerIds)))
       : [];
 
     // Map tags to customers
@@ -94,11 +120,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
     
     const newCustomer = await db.insert(customers).values({
       id: `cust_${nanoid()}`,
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       firstName: body.firstName,
       lastName: body.lastName || null,
       company: body.company || null,
@@ -117,6 +147,7 @@ export async function POST(request: NextRequest) {
       notes: body.notes || null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      createdBy: session.user.id,
     }).returning();
 
     return NextResponse.json(newCustomer[0], { status: 201 });

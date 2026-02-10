@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { signOut, useSession } from 'next-auth/react';
 import {
   LayoutDashboard,
   Users,
@@ -48,6 +49,10 @@ const bottomNavigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { data: session } = useSession();
+
+  const role = (session?.user as any)?.currentOrgRole as string | undefined;
+  const canAdmin = role === 'owner' || role === 'admin';
 
   return (
     <motion.aside
@@ -124,7 +129,9 @@ export function Sidebar() {
 
       {/* Bottom Navigation */}
       <div className="p-3 border-t border-white/[0.08] space-y-1">
-        {bottomNavigation.map((item) => {
+        {bottomNavigation
+          .filter((item) => (item.href === '/migrate' ? canAdmin : true))
+          .map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
 
@@ -166,15 +173,27 @@ export function Sidebar() {
             { 'justify-center': sidebarCollapsed }
           )}
         >
-          <GlassAvatar name="User" size="sm" />
+          <GlassAvatar
+            name={session?.user?.name || session?.user?.email || 'User'}
+            src={(session?.user as any)?.image || undefined}
+            size="sm"
+          />
           {!sidebarCollapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Χρήστης</p>
-              <p className="text-xs text-white/50 truncate">user@kktires.gr</p>
+              <p className="text-sm font-medium text-white truncate">
+                {session?.user?.name || 'Χρήστης'}
+              </p>
+              <p className="text-xs text-white/50 truncate">
+                {session?.user?.email || ''}
+              </p>
             </div>
           )}
           {!sidebarCollapsed && (
-            <button className="text-white/40 hover:text-white transition-colors">
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="text-white/40 hover:text-white transition-colors"
+              title="Αποσύνδεση"
+            >
               <LogOut className="h-4 w-4" />
             </button>
           )}

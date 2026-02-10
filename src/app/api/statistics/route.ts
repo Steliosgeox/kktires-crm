@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { customers, leads } from '@/lib/db/schema';
 import { eq, sql, and, gte } from 'drizzle-orm';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 // Direct function without cache (cache was causing stale zero results)
-async function getStatistics() {
+async function getStatistics(orgId: string) {
     console.log('📊 getStatistics called - querying database...');
     
     // Run queries in parallel for better performance
@@ -23,17 +22,17 @@ async function getStatistics() {
       // Get customer count
       db.select({ count: sql<number>`count(*)` })
         .from(customers)
-        .where(eq(customers.orgId, DEFAULT_ORG_ID)),
+        .where(eq(customers.orgId, orgId)),
 
       // Get total revenue
       db.select({ total: sql<number>`COALESCE(SUM(revenue), 0)` })
         .from(customers)
-        .where(eq(customers.orgId, DEFAULT_ORG_ID)),
+        .where(eq(customers.orgId, orgId)),
 
       // Get lead count
       db.select({ count: sql<number>`count(*)` })
         .from(leads)
-        .where(eq(leads.orgId, DEFAULT_ORG_ID)),
+        .where(eq(leads.orgId, orgId)),
 
       // Get leads by status
       db.select({
@@ -41,7 +40,7 @@ async function getStatistics() {
         count: sql<number>`count(*)`,
       })
         .from(leads)
-        .where(eq(leads.orgId, DEFAULT_ORG_ID))
+        .where(eq(leads.orgId, orgId))
         .groupBy(leads.status),
 
       // Get customers by category
@@ -50,7 +49,7 @@ async function getStatistics() {
         count: sql<number>`count(*)`,
       })
         .from(customers)
-        .where(eq(customers.orgId, DEFAULT_ORG_ID))
+        .where(eq(customers.orgId, orgId))
         .groupBy(customers.category),
 
       // Get customers by city
@@ -60,7 +59,7 @@ async function getStatistics() {
       })
         .from(customers)
         .where(and(
-          eq(customers.orgId, DEFAULT_ORG_ID),
+          eq(customers.orgId, orgId),
           sql`${customers.city} IS NOT NULL`
         ))
         .groupBy(customers.city)
@@ -75,7 +74,7 @@ async function getStatistics() {
         revenue: customers.revenue,
       })
         .from(customers)
-        .where(eq(customers.orgId, DEFAULT_ORG_ID))
+        .where(eq(customers.orgId, orgId))
         .orderBy(sql`${customers.revenue} DESC`)
         .limit(10),
 
@@ -83,7 +82,7 @@ async function getStatistics() {
       db.select({ count: sql<number>`count(*)` })
         .from(customers)
         .where(and(
-          eq(customers.orgId, DEFAULT_ORG_ID),
+          eq(customers.orgId, orgId),
           eq(customers.isVip, true)
         )),
     ]);
@@ -99,7 +98,7 @@ async function getStatistics() {
       .select({ count: sql<number>`count(*)` })
       .from(customers)
       .where(and(
-        eq(customers.orgId, DEFAULT_ORG_ID),
+        eq(customers.orgId, orgId),
         gte(customers.createdAt, startOfMonth)
       ));
 
@@ -131,7 +130,13 @@ export async function GET() {
   console.log('📊 Statistics API GET called');
   
   try {
-    const data = await getStatistics();
+    const session = await requireSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const orgId = getOrgIdFromSession(session);
+    const data = await getStatistics(orgId);
     console.log('📊 Returning data - customers:', data.overview.totalCustomers);
     return NextResponse.json(data);
   } catch (error) {
@@ -142,4 +147,3 @@ export async function GET() {
     );
   }
 }
-

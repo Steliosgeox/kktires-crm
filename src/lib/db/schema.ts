@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 
 // ============================================
@@ -30,7 +30,7 @@ export const organizationMembers = sqliteTable('organization_members', {
   invitedAt: integer('invited_at', { mode: 'timestamp' }),
   joinedAt: integer('joined_at', { mode: 'timestamp' }).notNull(),
 }, (table) => ({
-  userOrgIdx: index('user_org_idx').on(table.userId, table.orgId),
+  userOrgIdx: uniqueIndex('organization_members_user_org_uidx').on(table.userId, table.orgId),
 }));
 
 export const organizationInvitations = sqliteTable('organization_invitations', {
@@ -81,7 +81,9 @@ export const accounts = sqliteTable('accounts', {
   scope: text('scope'),
   id_token: text('id_token'),
   session_state: text('session_state'),
-});
+}, (table) => ({
+  providerAccountIdx: uniqueIndex('accounts_provider_account_uidx').on(table.provider, table.providerAccountId),
+}));
 
 // Verification tokens - compatible with NextAuth
 export const verificationTokens = sqliteTable('verification_tokens', {
@@ -336,11 +338,18 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   subject: text('subject').notNull(),
   content: text('content').notNull(),
   templateId: text('template_id').references(() => emailTemplates.id),
+  signatureId: text('signature_id').references(() => emailSignatures.id),
   status: text('status').notNull().default('draft'), // draft, scheduled, sending, sent, paused, cancelled
   
   // Sending
   fromEmail: text('from_email'),
   gmailCredentialId: text('gmail_credential_id').references(() => gmailCredentials.id),
+  recipientFilters: text('recipient_filters', { mode: 'json' }).$type<{
+    cities: string[];
+    tags: string[];
+    segments: string[];
+    categories: string[];
+  }>(),
   scheduledAt: integer('scheduled_at', { mode: 'timestamp' }),
   sentAt: integer('sent_at', { mode: 'timestamp' }),
   
@@ -373,6 +382,52 @@ export const campaignRecipients = sqliteTable('campaign_recipients', {
   errorMessage: text('error_message'),
 }, (table) => ({
   campaignIdx: index('recipients_campaign_idx').on(table.campaignId),
+}));
+
+// ============================================
+// EMAIL MARKETING: JOB QUEUE (DB-BACKED)
+// ============================================
+
+export const emailJobs = sqliteTable('email_jobs', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  campaignId: text('campaign_id').notNull().references(() => emailCampaigns.id, { onDelete: 'cascade' }),
+  senderUserId: text('sender_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+
+  status: text('status').notNull().default('queued'), // queued, processing, completed, failed, cancelled
+  runAt: integer('run_at', { mode: 'timestamp' }).notNull(),
+
+  attempts: integer('attempts').notNull().default(0),
+  maxAttempts: integer('max_attempts').notNull().default(3),
+
+  lockedAt: integer('locked_at', { mode: 'timestamp' }),
+  lockedBy: text('locked_by'),
+  startedAt: integer('started_at', { mode: 'timestamp' }),
+  completedAt: integer('completed_at', { mode: 'timestamp' }),
+  lastError: text('last_error'),
+
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  statusRunIdx: index('email_jobs_status_run_idx').on(table.status, table.runAt),
+  campaignIdx: index('email_jobs_campaign_idx').on(table.campaignId),
+}));
+
+export const emailJobItems = sqliteTable('email_job_items', {
+  id: text('id').primaryKey(),
+  jobId: text('job_id').notNull().references(() => emailJobs.id, { onDelete: 'cascade' }),
+  campaignId: text('campaign_id').notNull().references(() => emailCampaigns.id, { onDelete: 'cascade' }),
+  recipientId: text('recipient_id').notNull().references(() => campaignRecipients.id, { onDelete: 'cascade' }),
+
+  status: text('status').notNull().default('pending'), // pending, sent, failed
+  sentAt: integer('sent_at', { mode: 'timestamp' }),
+  errorMessage: text('error_message'),
+
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  jobIdx: index('email_job_items_job_idx').on(table.jobId),
+  campaignIdx: index('email_job_items_campaign_idx').on(table.campaignId),
 }));
 
 // ============================================
@@ -666,4 +721,3 @@ export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
-

@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, segments, customers } from '@/lib/db';
 import { eq, count, and, like, or, gt, lt, gte, lte, ne } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 // GET /api/segments - Get all segments with customer counts
 export async function GET() {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const allSegments = await db.query.segments.findMany({
-      where: eq(segments.orgId, DEFAULT_ORG_ID),
+      where: eq(segments.orgId, orgId),
       orderBy: (segments, { desc }) => [desc(segments.createdAt)],
     });
 
@@ -22,38 +25,40 @@ export async function GET() {
           // Build filter query
           const conditions = segment.filters.conditions.map((cond) => {
             const field = cond.field as keyof typeof customers.$inferSelect;
+            const column = (customers as any)[field];
+            if (!column) return null;
             const value = cond.value as string | number | boolean;
             
             switch (cond.operator) {
               case 'equals':
-                return eq(customers[field], value as string);
+                return eq(column, value as any);
               case 'contains':
-                return like(customers[field], `%${value}%`);
+                return like(column, `%${value}%`);
               case 'startsWith':
-                return like(customers[field], `${value}%`);
+                return like(column, `${value}%`);
               case 'greaterThan':
-                return gt(customers[field], value as number);
+                return gt(column, value as number);
               case 'lessThan':
-                return lt(customers[field], value as number);
+                return lt(column, value as number);
               case 'greaterOrEqual':
-                return gte(customers[field], value as number);
+                return gte(column, value as number);
               case 'lessOrEqual':
-                return lte(customers[field], value as number);
+                return lte(column, value as number);
               case 'notEquals':
-                return ne(customers[field], value as string);
+                return ne(column, value as any);
               default:
-                return eq(customers[field], value as string);
+                return eq(column, value as any);
             }
-          });
+          }).filter(Boolean) as any[];
 
           try {
             const [result] = await db
               .select({ count: count() })
               .from(customers)
               .where(
-                segment.filters.logic === 'or' 
-                  ? or(...conditions) 
-                  : and(eq(customers.orgId, DEFAULT_ORG_ID), ...conditions)
+                segment.filters.logic === 'or'
+                  ? and(eq(customers.orgId, orgId), or(...conditions))
+                  : and(eq(customers.orgId, orgId), ...conditions)
               );
             customerCount = result?.count || 0;
           } catch (e) {
@@ -79,12 +84,16 @@ export async function GET() {
 // POST /api/segments - Create new segment
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
     const now = new Date();
 
     const [newSegment] = await db.insert(segments).values({
       id: nanoid(),
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       name: body.name,
       description: body.description || null,
       filters: body.filters || null,
@@ -99,4 +108,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create segment' }, { status: 500 });
   }
 }
-

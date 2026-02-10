@@ -3,15 +3,18 @@ import { db } from '@/lib/db';
 import { tags } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 export async function GET() {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const allTags = await db
       .select()
       .from(tags)
-      .where(eq(tags.orgId, DEFAULT_ORG_ID));
+      .where(eq(tags.orgId, orgId));
 
     return NextResponse.json({ tags: allTags });
   } catch (error) {
@@ -25,11 +28,15 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
     
     const newTag = await db.insert(tags).values({
       id: `tag_${nanoid()}`,
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       name: body.name,
       color: body.color || '#3B82F6',
       description: body.description || null,

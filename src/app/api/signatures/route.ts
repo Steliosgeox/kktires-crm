@@ -3,15 +3,18 @@ import { db } from '@/lib/db';
 import { emailSignatures } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 export async function GET() {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const signatures = await db
       .select()
       .from(emailSignatures)
-      .where(eq(emailSignatures.orgId, DEFAULT_ORG_ID))
+      .where(eq(emailSignatures.orgId, orgId))
       .orderBy(desc(emailSignatures.isDefault), desc(emailSignatures.createdAt));
 
     return NextResponse.json({ signatures });
@@ -23,6 +26,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
 
     // If this is set as default, unset other defaults first
@@ -30,15 +37,16 @@ export async function POST(request: NextRequest) {
       await db
         .update(emailSignatures)
         .set({ isDefault: false })
-        .where(eq(emailSignatures.orgId, DEFAULT_ORG_ID));
+        .where(eq(emailSignatures.orgId, orgId));
     }
 
     const newSignature = await db.insert(emailSignatures).values({
       id: `sig_${nanoid()}`,
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       name: body.name,
       content: body.content,
       isDefault: body.isDefault || false,
+      createdBy: session.user.id,
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();

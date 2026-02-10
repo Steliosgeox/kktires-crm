@@ -2,20 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { emailTemplates } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     
     const template = await db.query.emailTemplates.findFirst({
       where: (t, { eq, and }) => and(
         eq(t.id, id),
-        eq(t.orgId, DEFAULT_ORG_ID)
+        eq(t.orgId, orgId)
       ),
     });
 
@@ -35,6 +38,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     const body = await request.json();
 
@@ -49,7 +56,7 @@ export async function PUT(
       })
       .where(and(
         eq(emailTemplates.id, id),
-        eq(emailTemplates.orgId, DEFAULT_ORG_ID)
+        eq(emailTemplates.orgId, orgId)
       ))
       .returning();
 
@@ -69,13 +76,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     
     const deleted = await db
       .delete(emailTemplates)
       .where(and(
         eq(emailTemplates.id, id),
-        eq(emailTemplates.orgId, DEFAULT_ORG_ID)
+        eq(emailTemplates.orgId, orgId)
       ))
       .returning();
 

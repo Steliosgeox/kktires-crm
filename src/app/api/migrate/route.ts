@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { customers, leads, tags, customerTags, tasks, organizations, users } from '@/lib/db/schema';
+import { customers, tags, customerTags, organizations } from '@/lib/db/schema';
+import { getOrgIdFromSession, hasRole, requireSession } from '@/server/authz';
 import { nanoid } from 'nanoid';
-import { eq } from 'drizzle-orm';
-
-const DEFAULT_ORG_ID = 'org_kktires';
-const DEFAULT_USER_ID = 'user_admin';
+import { and, eq, inArray } from 'drizzle-orm';
 
 // Map Greek category names to our schema
 const categoryMap: Record<string, string> = {
@@ -131,7 +129,21 @@ function normalizeCustomer(raw: WPFCustomer): {
 }
 
 export async function POST(request: NextRequest) {
+  if (process.env.ENABLE_MIGRATE_ENDPOINT !== 'true') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
+    const session = await requireSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRole(session, ['owner', 'admin'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
     const { customers: customersData, clearExisting = false } = body;
 
@@ -146,12 +158,12 @@ export async function POST(request: NextRequest) {
 
     // Ensure organization exists
     const existingOrg = await db.query.organizations.findFirst({
-      where: (orgs, { eq }) => eq(orgs.id, DEFAULT_ORG_ID),
+      where: (orgs, { eq }) => eq(orgs.id, orgId),
     });
 
     if (!existingOrg) {
       await db.insert(organizations).values({
-        id: DEFAULT_ORG_ID,
+        id: orgId,
         name: 'KK Tires',
         slug: 'kktires',
         createdAt: new Date(),
@@ -166,26 +178,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Ensure admin user exists
-    const existingUser = await db.query.users.findFirst({
-      where: (users, { eq }) => eq(users.id, DEFAULT_USER_ID),
-    });
-
-    if (!existingUser) {
-      await db.insert(users).values({
-        id: DEFAULT_USER_ID,
-        email: 'admin@kktires.gr',
-        name: 'Admin',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
-
     // Clear existing data if requested
     if (clearExisting) {
       console.log('Clearing existing customer data...');
-      await db.delete(customerTags).where(eq(customerTags.customerId, customerTags.customerId));
-      await db.delete(customers).where(eq(customers.orgId, DEFAULT_ORG_ID));
+      const existingCustomerIds = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .where(eq(customers.orgId, orgId));
+
+      const ids = existingCustomerIds.map((c) => c.id);
+      if (ids.length > 0) {
+        await db.delete(customerTags).where(inArray(customerTags.customerId, ids));
+      }
+
+      await db.delete(customers).where(eq(customers.orgId, orgId));
     }
 
     // Collect all unique tags
@@ -195,7 +201,7 @@ export async function POST(request: NextRequest) {
 
     // Create tags if they don't exist
     const tagMap = new Map<string, string>();
-    const existingTags = await db.select().from(tags).where(eq(tags.orgId, DEFAULT_ORG_ID));
+    const existingTags = await db.select().from(tags).where(eq(tags.orgId, orgId));
     existingTags.forEach(t => tagMap.set(t.name.toLowerCase(), t.id));
 
     const newTags: { id: string; orgId: string; name: string; color: string; createdAt: Date }[] = [];
@@ -208,7 +214,7 @@ export async function POST(request: NextRequest) {
         tagMap.set(tagName.toLowerCase(), tagId);
         newTags.push({
           id: tagId,
-          orgId: DEFAULT_ORG_ID,
+          orgId,
           name: tagName,
           color: tagColors[colorIndex % tagColors.length],
           createdAt: new Date(),
@@ -247,14 +253,14 @@ export async function POST(request: NextRequest) {
 
         return {
           id: customerId,
-          orgId: DEFAULT_ORG_ID,
+          orgId,
           firstName: c.firstName,
           lastName: c.lastName,
           company: c.company,
           email: c.email,
           phone: c.phone,
           mobile: c.mobile,
-          address: c.address,
+          street: c.address,
           city: c.city,
           postalCode: c.postalCode,
           afm: c.afm,
@@ -265,7 +271,7 @@ export async function POST(request: NextRequest) {
           notes: c.notes,
           createdAt: new Date(),
           updatedAt: new Date(),
-          createdBy: DEFAULT_USER_ID,
+          createdBy: session.user.id,
         };
       });
 
@@ -303,9 +309,23 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to check migration status
 export async function GET() {
+  if (process.env.ENABLE_MIGRATE_ENDPOINT !== 'true') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
-    const customerCount = await db.select().from(customers).where(eq(customers.orgId, DEFAULT_ORG_ID));
-    const tagCount = await db.select().from(tags).where(eq(tags.orgId, DEFAULT_ORG_ID));
+    const session = await requireSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRole(session, ['owner', 'admin'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const orgId = getOrgIdFromSession(session);
+
+    const customerCount = await db.select().from(customers).where(eq(customers.orgId, orgId));
+    const tagCount = await db.select().from(tags).where(eq(tags.orgId, orgId));
     
     return NextResponse.json({
       status: 'ready',
@@ -340,4 +360,3 @@ export async function GET() {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
-

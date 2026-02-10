@@ -4,6 +4,8 @@ declare module 'next-auth' {
   interface Session {
     user: {
       id: string;
+      currentOrgId?: string;
+      currentOrgRole?: 'owner' | 'admin' | 'member';
     } & DefaultSession['user'];
   }
 }

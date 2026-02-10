@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { signIn, useSession } from 'next-auth/react';
 import {
   User,
   Building2,
@@ -15,6 +16,7 @@ import {
   Key,
   ExternalLink,
   Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -35,13 +37,8 @@ const settingsNav = [
   { id: 'security', label: 'Ασφάλεια', icon: Shield },
 ];
 
-const integrations = [
-  { id: 'gmail', name: 'Gmail', icon: Mail, connected: true, email: 'user@gmail.com' },
-  { id: 'calendar', name: 'Google Calendar', icon: Calendar, connected: false },
-  { id: 'maps', name: 'Google Maps', icon: MapPin, connected: true },
-];
-
 export default function SettingsPage() {
+  const { data: session, status: sessionStatus } = useSession();
   const [activeSection, setActiveSection] = useState('profile');
   const [notifications, setNotifications] = useState({
     email: true,
@@ -50,6 +47,55 @@ export default function SettingsPage() {
     tasks: true,
     campaigns: true,
   });
+
+  const [gmailStatus, setGmailStatus] = useState<{
+    connected: boolean;
+    hasRefreshToken: boolean;
+    scope: string | null;
+    email: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/integrations/gmail')
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setGmailStatus(data);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const integrations = useMemo(() => {
+    const mapsConnected = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const gmailConnected = !!gmailStatus?.connected && !!gmailStatus?.hasRefreshToken;
+
+    return [
+      {
+        id: 'gmail',
+        name: 'Gmail',
+        icon: Mail,
+        connected: gmailConnected,
+        attention: !!gmailStatus?.connected && !gmailStatus?.hasRefreshToken,
+        email: gmailStatus?.email || session?.user?.email || null,
+        onConnect: () => signIn('google', { callbackUrl: '/settings' }),
+      },
+      { id: 'calendar', name: 'Google Calendar', icon: Calendar, connected: false, onConnect: () => undefined },
+      { id: 'maps', name: 'Google Maps', icon: MapPin, connected: mapsConnected, onConnect: () => undefined },
+    ] as const;
+  }, [gmailStatus, session?.user?.email]);
+
+  if (sessionStatus === 'loading') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Ρυθμίσεις</h1>
+          <p className="text-white/60">Φόρτωση...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -95,7 +141,7 @@ export default function SettingsPage() {
               
               {/* Avatar */}
               <div className="flex items-center gap-6 mb-8">
-                <GlassAvatar name="Χρήστης" size="xl" />
+                <GlassAvatar name={session?.user?.name || session?.user?.email || 'Χρήστης'} size="xl" />
                 <div>
                   <GlassButton variant="default" size="sm">
                     Αλλαγή Φωτογραφίας
@@ -106,9 +152,9 @@ export default function SettingsPage() {
 
               {/* Form */}
               <div className="grid gap-6 md:grid-cols-2">
-                <GlassInput label="Όνομα" defaultValue="Χρήστης" />
+                <GlassInput label="Όνομα" defaultValue={session?.user?.name || ''} />
                 <GlassInput label="Επώνυμο" defaultValue="" />
-                <GlassInput label="Email" type="email" defaultValue="user@example.com" />
+                <GlassInput label="Email" type="email" defaultValue={session?.user?.email || ''} />
                 <GlassInput label="Τηλέφωνο" defaultValue="" />
               </div>
 
@@ -158,7 +204,9 @@ export default function SettingsPage() {
                           <div>
                             <h3 className="font-medium text-white">{integration.name}</h3>
                             {integration.connected ? (
-                              <p className="text-sm text-white/50">{integration.email || 'Συνδεδεμένο'}</p>
+                              <p className="text-sm text-white/50">{(integration as any).email || 'Συνδεδεμένο'}</p>
+                            ) : (integration as any).attention ? (
+                              <p className="text-sm text-amber-300/80">Χρειάζεται επανασύνδεση (λείπει refresh token)</p>
                             ) : (
                               <p className="text-sm text-white/40">Μη συνδεδεμένο</p>
                             )}
@@ -170,13 +218,20 @@ export default function SettingsPage() {
                               <Check className="h-3 w-3 mr-1" />
                               Συνδεδεμένο
                             </GlassBadge>
-                            <GlassButton variant="ghost" size="sm">
-                              Αποσύνδεση
+                            <GlassButton variant="ghost" size="sm" onClick={() => (integration as any).onConnect?.()}>
+                              Επανασύνδεση
                             </GlassButton>
                           </div>
                         ) : (
-                          <GlassButton variant="primary" size="sm">
-                            Σύνδεση
+                          <GlassButton variant="primary" size="sm" onClick={() => (integration as any).onConnect?.()}>
+                            {(integration as any).attention ? (
+                              <span className="inline-flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                Επανασύνδεση
+                              </span>
+                            ) : (
+                              'Σύνδεση'
+                            )}
                           </GlassButton>
                         )}
                       </div>

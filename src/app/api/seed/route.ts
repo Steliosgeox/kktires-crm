@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
+import { requireSession, hasRole, getOrgIdFromSession } from '@/server/authz';
 import { db } from '@/lib/db';
 import { organizations, customers, tags, customerTags, leads } from '@/lib/db/schema';
 import { nanoid } from 'nanoid';
-
-const DEFAULT_ORG_ID = 'org_kktires';
 
 // Sample Greek customer data
 const sampleCustomers = [
@@ -192,15 +191,29 @@ const sampleLeads = [
 ];
 
 export async function POST() {
+  if (process.env.ENABLE_SEED_ENDPOINT !== 'true') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   try {
+    const session = await requireSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasRole(session, ['owner', 'admin'])) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const orgId = getOrgIdFromSession(session);
+
     // Create organization if not exists
     const existingOrg = await db.query.organizations.findFirst({
-      where: (orgs, { eq }) => eq(orgs.id, DEFAULT_ORG_ID),
+      where: (orgs, { eq }) => eq(orgs.id, orgId),
     });
 
     if (!existingOrg) {
       await db.insert(organizations).values({
-        id: DEFAULT_ORG_ID,
+        id: orgId,
         name: 'KK Tires',
         slug: 'kktires',
         settings: {
@@ -222,7 +235,7 @@ export async function POST() {
       const tagId = `tag_${nanoid()}`;
       await db.insert(tags).values({
         id: tagId,
-        orgId: DEFAULT_ORG_ID,
+        orgId,
         name: tag.name,
         color: tag.color,
         createdAt: new Date(),
@@ -232,7 +245,7 @@ export async function POST() {
 
     // Get existing tags
     const allTags = await db.query.tags.findMany({
-      where: (t, { eq }) => eq(t.orgId, DEFAULT_ORG_ID),
+      where: (t, { eq }) => eq(t.orgId, orgId),
     });
 
     // Create customers
@@ -241,7 +254,7 @@ export async function POST() {
       const customerId = `cust_${nanoid()}`;
       await db.insert(customers).values({
         id: customerId,
-        orgId: DEFAULT_ORG_ID,
+        orgId,
         firstName: customer.firstName,
         lastName: customer.lastName,
         company: customer.company,
@@ -292,7 +305,7 @@ export async function POST() {
     for (const lead of sampleLeads) {
       await db.insert(leads).values({
         id: `lead_${nanoid()}`,
-        orgId: DEFAULT_ORG_ID,
+        orgId,
         firstName: lead.firstName,
         lastName: lead.lastName,
         company: lead.company,

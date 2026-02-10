@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { customers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 // GET single customer
 export async function GET(
@@ -11,12 +10,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     
     const customer = await db.query.customers.findFirst({
       where: (c, { eq, and }) => and(
         eq(c.id, id),
-        eq(c.orgId, DEFAULT_ORG_ID)
+        eq(c.orgId, orgId)
       ),
     });
 
@@ -43,6 +46,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     const body = await request.json();
     
@@ -68,7 +75,7 @@ export async function PUT(
       })
       .where(and(
         eq(customers.id, id),
-        eq(customers.orgId, DEFAULT_ORG_ID)
+        eq(customers.orgId, orgId)
       ))
       .returning();
 
@@ -95,13 +102,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     
     const deleted = await db
       .delete(customers)
       .where(and(
         eq(customers.id, id),
-        eq(customers.orgId, DEFAULT_ORG_ID)
+        eq(customers.orgId, orgId)
       ))
       .returning();
 

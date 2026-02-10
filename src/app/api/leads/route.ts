@@ -1,23 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = (page - 1) * limit;
 
+    const whereParts: any[] = [eq(leads.orgId, orgId)];
+    if (status && status !== 'all') {
+      whereParts.push(eq(leads.status, status));
+    }
+
     const allLeads = await db
       .select()
       .from(leads)
-      .where(eq(leads.orgId, DEFAULT_ORG_ID))
+      .where(and(...whereParts))
       .orderBy(desc(leads.createdAt))
       .limit(limit)
       .offset(offset);
@@ -25,7 +33,7 @@ export async function GET(request: NextRequest) {
     const countResult = await db
       .select({ count: sql<number>`count(*)` })
       .from(leads)
-      .where(eq(leads.orgId, DEFAULT_ORG_ID));
+      .where(and(...whereParts));
     
     const total = countResult[0]?.count || 0;
 
@@ -60,11 +68,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
     
     const newLead = await db.insert(leads).values({
       id: `lead_${nanoid()}`,
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       firstName: body.firstName,
       lastName: body.lastName || null,
       company: body.company || null,

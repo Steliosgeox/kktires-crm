@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, segments } from '@/lib/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 // GET /api/segments/:id - Get single segment
 export async function GET(
@@ -8,10 +9,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     
     const segment = await db.query.segments.findFirst({
-      where: eq(segments.id, id),
+      where: and(eq(segments.id, id), eq(segments.orgId, orgId)),
     });
 
     if (!segment) {
@@ -31,11 +36,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
     const body = await request.json();
 
     const existing = await db.query.segments.findFirst({
-      where: eq(segments.id, id),
+      where: and(eq(segments.id, id), eq(segments.orgId, orgId)),
     });
 
     if (!existing) {
@@ -50,7 +59,7 @@ export async function PUT(
         filters: body.filters !== undefined ? body.filters : existing.filters,
         updatedAt: new Date(),
       })
-      .where(eq(segments.id, id))
+      .where(and(eq(segments.id, id), eq(segments.orgId, orgId)))
       .returning();
 
     return NextResponse.json({ segment: updatedSegment });
@@ -66,9 +75,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { id } = await params;
 
-    await db.delete(segments).where(eq(segments.id, id));
+    await db.delete(segments).where(and(eq(segments.id, id), eq(segments.orgId, orgId)));
 
     return NextResponse.json({ success: true });
   } catch (error) {

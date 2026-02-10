@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KK Tires CRM (Next.js + NextAuth + Drizzle + Turso)
 
-## Getting Started
+This is a Next.js App Router CRM with an Outlook-style email/campaign UI. The backend uses:
 
-First, run the development server:
+- **Auth**: NextAuth v5 (Google OAuth)
+- **DB**: Drizzle ORM + SQLite/libSQL (Turso recommended for production)
+- **Email sending**: Gmail API (`gmail.send`) via each logged-in user’s connected Google account
+- **Background sending**: **Vercel Cron** + DB-backed job queue (no long-running worker)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Local Development
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Create `.env.local` from `.env.example`.
+2. Run migrations:
+   - `npm run db:migrate`
+3. Start:
+   - `npm run dev`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy On Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Required Environment Variables
 
-## Learn More
+Set these in Vercel Project Settings:
 
-To learn more about Next.js, take a look at the following resources:
+- `DATABASE_URL` (use Turso/libSQL in production, not a local file)
+- `DATABASE_AUTH_TOKEN` (required for Turso)
+- `NEXTAUTH_URL` (your public URL, e.g. `https://crm.example.com`)
+- `NEXTAUTH_SECRET`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_ALLOWED_EMAILS` (comma-separated allowlist; non-allowlisted users are denied at sign-in)
+- `EMAIL_TRACKING_SECRET` (signs tracking links/pixels)
+- `OAUTH_TOKEN_ENCRYPTION_KEY` (base64-encoded 32 bytes; encrypts OAuth tokens at rest)
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (only if you use the Map page)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Email Job Processing (Vercel Cron)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Campaign sends are enqueued via authenticated endpoints and processed by a cron route:
 
-## Deploy on Vercel
+- `vercel.json` config schedules `GET /api/cron/email-jobs` every minute.
+- The processor sends emails in chunks to stay within serverless time limits.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Optional knobs:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `EMAIL_CRON_TIME_BUDGET_MS` (default `8000`)
+- `EMAIL_CRON_MAX_JOBS` (default `5`)
+- `EMAIL_JOB_MAX_ITEMS_PER_RUN` (default `50`)
+- `EMAIL_JOB_CONCURRENCY` (default `4`)
+- `EMAIL_JOB_YIELD_DELAY_MS` (default `0`)
+- `EMAIL_JOB_LOCK_TIMEOUT_MS` (default `900000` = 15 minutes)
+
+Optional protection:
+
+- `CRON_SECRET`: if set, `/api/cron/email-jobs` requires `Authorization: Bearer <CRON_SECRET>` (or the `x-vercel-cron` header).
+
+## Notes
+
+- Vercel’s filesystem is ephemeral: do not use `file:./something.db` in production.
+- Tracking URLs require a correct `NEXTAUTH_URL` so links/pixels point at the deployed domain.
+- If `OAUTH_TOKEN_ENCRYPTION_KEY` changes, previously stored encrypted tokens cannot be decrypted.
+

@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { emailTemplates } from '@/lib/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-
-const DEFAULT_ORG_ID = 'org_kktires';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const templates = await db
       .select()
       .from(emailTemplates)
-      .where(eq(emailTemplates.orgId, DEFAULT_ORG_ID))
+      .where(eq(emailTemplates.orgId, orgId))
       .orderBy(desc(emailTemplates.createdAt));
 
     return NextResponse.json({ templates });
@@ -23,15 +26,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const body = await request.json();
 
     const newTemplate = await db.insert(emailTemplates).values({
       id: `tmpl_${nanoid()}`,
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       name: body.name,
       subject: body.subject || body.name,
       content: body.content || '',
       category: body.category || 'general',
+      createdBy: session.user.id,
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
@@ -42,4 +50,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create template' }, { status: 500 });
   }
 }
-

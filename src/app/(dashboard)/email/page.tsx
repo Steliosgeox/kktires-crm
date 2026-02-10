@@ -85,6 +85,7 @@ export default function EmailPage() {
     all: campaigns.length,
     draft: campaigns.filter((c) => c.status === 'draft').length,
     scheduled: campaigns.filter((c) => c.status === 'scheduled').length,
+    sending: campaigns.filter((c) => c.status === 'sending').length,
     sent: campaigns.filter((c) => c.status === 'sent').length,
     failed: campaigns.filter((c) => c.status === 'failed').length,
   }), [campaigns]);
@@ -102,6 +103,8 @@ export default function EmailPage() {
       filtered = filtered.filter((c) => c.status === 'draft');
     } else if (activeSection === 'scheduled') {
       filtered = filtered.filter((c) => c.status === 'scheduled');
+    } else if (activeSection === 'sending') {
+      filtered = filtered.filter((c) => c.status === 'sending');
     } else if (activeSection === 'sent') {
       filtered = filtered.filter((c) => c.status === 'sent');
     } else if (activeSection === 'failed') {
@@ -158,18 +161,14 @@ export default function EmailPage() {
   // Fetch recipient count when filters change
   useEffect(() => {
     const fetchRecipientCount = async () => {
-      if (!recipientFilters.cities.length && !recipientFilters.tags.length && !recipientFilters.segments.length) {
-        setRecipientCount(0);
-        return;
-      }
-
       try {
         const params = new URLSearchParams();
         if (recipientFilters.cities.length) params.set('cities', recipientFilters.cities.join(','));
         if (recipientFilters.tags.length) params.set('tags', recipientFilters.tags.join(','));
         if (recipientFilters.segments.length) params.set('segments', recipientFilters.segments.join(','));
+        if (recipientFilters.categories.length) params.set('categories', recipientFilters.categories.join(','));
 
-        const response = await fetch(`/api/recipients/count?${params}`);
+        const response = await fetch(`/api/recipients/count?${params.toString()}`);
         if (response.ok) {
           const data = await response.json();
           setRecipientCount(data.count || 0);
@@ -215,14 +214,23 @@ export default function EmailPage() {
     setIsEditing(true);
     setIsNew(false);
 
-    // Load campaign data
-    const campaign = campaigns.find((c) => c.id === id);
-    if (campaign) {
-      setCampaignName(campaign.name);
-      setSubject(campaign.subject);
-      setContent(campaign.content || '');
-      // Note: In a real app, you'd also load the recipient filters from the campaign
-    }
+    // Load campaign data (full record)
+    fetch(`/api/campaigns/${id}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load campaign');
+        return res.json();
+      })
+      .then((campaign) => {
+        setCampaignName(campaign.name);
+        setSubject(campaign.subject);
+        setContent(campaign.content || '');
+        setRecipientFilters(campaign.recipientFilters || { cities: [], tags: [], segments: [], categories: [] });
+        setSelectedSignature(campaign.signatureId || null);
+      })
+      .catch((err) => {
+        console.error('Error loading campaign:', err);
+        setError('Αποτυχία φόρτωσης campaign');
+      });
   };
 
   // Handle template selection
@@ -250,8 +258,9 @@ export default function EmailPage() {
         name: campaignName,
         subject,
         content,
-        status: sendNow ? 'sending' : 'draft',
+        status: 'draft',
         recipientFilters,
+        signatureId: selectedSignature,
       };
 
       const url = isNew ? '/api/campaigns' : `/api/campaigns/${selectedCampaignId}`;
@@ -267,19 +276,18 @@ export default function EmailPage() {
         throw new Error('Failed to save campaign');
       }
 
-      // Refresh data
-      await fetchData();
+      const saved = await response.json();
+      const campaignId = saved?.id || selectedCampaignId;
 
       if (sendNow) {
-        // If sending, also trigger the send
-        await fetch('/api/email/send', {
+        // Trigger send for the saved campaign
+        await fetch(`/api/campaigns/${campaignId}/send`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            campaignId: selectedCampaignId || (await response.json()).id,
-          }),
         });
       }
+
+      // Refresh data
+      await fetchData();
 
       // Reset state
       setIsEditing(false);
@@ -292,6 +300,56 @@ export default function EmailPage() {
     } finally {
       setSaving(false);
       setSending(false);
+    }
+  };
+
+  const handleSchedule = async (runAtIso: string) => {
+    try {
+      setSaving(true);
+
+      const payload = {
+        name: campaignName,
+        subject,
+        content,
+        status: 'scheduled',
+        scheduledAt: runAtIso,
+        recipientFilters,
+        signatureId: selectedSignature,
+      };
+
+      const url = isNew ? '/api/campaigns' : `/api/campaigns/${selectedCampaignId}`;
+      const method = isNew ? 'POST' : 'PUT';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save campaign');
+      }
+
+      const saved = await response.json();
+      const campaignId = saved?.id || selectedCampaignId;
+
+      await fetch(`/api/campaigns/${campaignId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runAt: runAtIso }),
+      });
+
+      await fetchData();
+
+      setIsEditing(false);
+      setIsNew(false);
+      setSelectedCampaignId(null);
+      resetEditor();
+    } catch (err) {
+      console.error('Error scheduling campaign:', err);
+      setError('Αποτυχία προγραμματισμού');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -387,6 +445,7 @@ export default function EmailPage() {
             selectedSignature={selectedSignature}
             setSelectedSignature={setSelectedSignature}
             onSave={handleSave}
+            onSchedule={handleSchedule}
             onCancel={handleCancel}
             onOpenRecipients={() => setShowRecipientDrawer(true)}
             saving={saving}

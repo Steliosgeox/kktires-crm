@@ -1,13 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { emailCampaigns, customers } from '@/lib/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { emailCampaigns } from '@/lib/db/schema';
+import { desc, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
+import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
-const DEFAULT_ORG_ID = 'org_kktires';
+const campaignStatusSchema = z.enum(['draft', 'scheduled', 'sending', 'sent', 'paused', 'cancelled', 'failed']);
+
+const campaignCreateSchema = z.object({
+  name: z.string().min(1),
+  subject: z.string().optional(),
+  content: z.string().optional(),
+  status: campaignStatusSchema.optional(),
+  scheduledAt: z.string().optional().nullable(),
+  recipientFilters: z.unknown().optional(),
+  signatureId: z.string().optional().nullable(),
+});
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -30,7 +47,7 @@ export async function GET(request: NextRequest) {
         createdAt: emailCampaigns.createdAt,
       })
         .from(emailCampaigns)
-        .where(eq(emailCampaigns.orgId, DEFAULT_ORG_ID))
+        .where(eq(emailCampaigns.orgId, orgId))
         .orderBy(desc(emailCampaigns.createdAt))
         .limit(limit)
         .offset(offset),
@@ -38,7 +55,7 @@ export async function GET(request: NextRequest) {
       // Get total count
       db.select({ count: sql<number>`count(*)` })
         .from(emailCampaigns)
-        .where(eq(emailCampaigns.orgId, DEFAULT_ORG_ID)),
+        .where(eq(emailCampaigns.orgId, orgId)),
 
       // Calculate stats
       db.select({
@@ -47,7 +64,7 @@ export async function GET(request: NextRequest) {
         totalClicks: sql<number>`COALESCE(SUM(${emailCampaigns.clickCount}), 0)`,
       })
         .from(emailCampaigns)
-        .where(eq(emailCampaigns.orgId, DEFAULT_ORG_ID)),
+        .where(eq(emailCampaigns.orgId, orgId)),
     ]);
 
     const total = countResult[0]?.count || 0;
@@ -75,13 +92,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const session = await requireSession();
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const orgId = getOrgIdFromSession(session);
 
-    // Count recipients (customers with email who haven't unsubscribed)
-    const recipientCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(customers)
-      .where(sql`${customers.orgId} = ${DEFAULT_ORG_ID} AND ${customers.email} IS NOT NULL AND (${customers.unsubscribed} = 0 OR ${customers.unsubscribed} IS NULL)`);
+    const parsed = campaignCreateSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid payload', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    const body = parsed.data;
+    const recipientFilters = normalizeRecipientFilters(body.recipientFilters);
+    const totalRecipients = await countRecipients(orgId, recipientFilters);
 
     // Parse scheduledAt - schema expects Date objects with { mode: 'timestamp' }
     let scheduledAtDate: Date | null = null;
@@ -94,13 +119,15 @@ export async function POST(request: NextRequest) {
 
     const newCampaign = await db.insert(emailCampaigns).values({
       id: `camp_${nanoid()}`,
-      orgId: DEFAULT_ORG_ID,
+      orgId,
       name: body.name,
       subject: body.subject || body.name,
       content: body.content || '',
       status: body.status || 'draft',
       scheduledAt: scheduledAtDate,
-      totalRecipients: recipientCount[0]?.count || 0,
+      totalRecipients,
+      recipientFilters,
+      signatureId: body.signatureId || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
@@ -111,4 +138,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create campaign' }, { status: 500 });
   }
 }
-

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 import {
   Upload,
   FileSpreadsheet,
@@ -31,6 +32,10 @@ interface MigrationStatus {
 }
 
 export default function MigratePage() {
+  const { data: session, status: sessionStatus } = useSession();
+  const role = (session?.user as any)?.currentOrgRole as string | undefined;
+  const canAdmin = role === 'owner' || role === 'admin';
+
   const [jsonData, setJsonData] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string; stats?: MigrationStats } | null>(null);
@@ -47,9 +52,32 @@ export default function MigratePage() {
     }
   }, []);
 
-  useState(() => {
+  useEffect(() => {
+    if (!canAdmin) return;
     fetchStatus();
-  });
+  }, [canAdmin, fetchStatus]);
+
+  if (sessionStatus === 'loading') {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Μετεγκατάσταση Δεδομένων</h1>
+          <p className="text-white/60">Φόρτωση...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canAdmin) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Μετεγκατάσταση</h1>
+          <p className="text-white/60">Δεν έχετε δικαίωμα πρόσβασης.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -56,14 +56,7 @@ export function RecipientSelector({ filters, onChange, onPreview }: RecipientSel
     let isMounted = true;
     const abortController = new AbortController();
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'recipient-selector.tsx:useEffect',message:'useEffect triggered',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
-    
     const fetchData = async () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'recipient-selector.tsx:fetchData',message:'fetchData started',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       setLoading(true);
       try {
         const [locationsRes, tagsRes, segmentsRes] = await Promise.all([
@@ -77,17 +70,11 @@ export function RecipientSelector({ filters, onChange, onPreview }: RecipientSel
 
         if (locationsRes.ok) {
           const data = await locationsRes.json();
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'recipient-selector.tsx:locationsRes',message:'Locations API response',data:{hasLocations:!!data.locations,hasCities:!!data.cities,dataKeys:Object.keys(data),citiesLength:data.cities?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H3',runId:'post-fix'})}).catch(()=>{});
-          // #endregion
           // FIX: API returns 'cities' array directly, not 'locations' with city property
           const cityArray = (data.cities || []).map((c: { name: string; count: number }) => ({
             city: c.name,
             count: c.count,
           }));
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'recipient-selector.tsx:setCities',message:'Setting cities',data:{cityArrayLength:cityArray.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1',runId:'post-fix'})}).catch(()=>{});
-          // #endregion
           if (isMounted) setCities(cityArray);
         }
 
@@ -103,9 +90,6 @@ export function RecipientSelector({ filters, onChange, onPreview }: RecipientSel
       } catch (error) {
         // Ignore abort errors
         if (error instanceof Error && error.name === 'AbortError') return;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'recipient-selector.tsx:catch',message:'Fetch error',data:{error:String(error)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H4'})}).catch(()=>{});
-        // #endregion
         console.error('Error fetching filter options:', error);
       } finally {
         if (isMounted) setLoading(false);
@@ -125,10 +109,6 @@ export function RecipientSelector({ filters, onChange, onPreview }: RecipientSel
   useEffect(() => {
     let isMounted = true;
     const abortController = new AbortController();
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/2e146d35-fb58-447a-b3a0-2eabdca19cf2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'recipient-selector.tsx:recipientCount-useEffect',message:'Recipient count effect triggered',data:{filtersCities:filters.cities.length,filtersTags:filters.tags.length,filtersSegments:filters.segments.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
     
     const calculateRecipients = async () => {
       // If no filters, show total with email

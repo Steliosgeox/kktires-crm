@@ -46,6 +46,7 @@ interface OutlookSidebarProps {
     all: number;
     draft: number;
     scheduled: number;
+    sending: number;
     sent: number;
     failed: number;
   };
@@ -55,7 +56,7 @@ export function OutlookSidebar({
   activeItem,
   onItemSelect,
   onNewCampaign,
-  folderCounts = { all: 0, draft: 0, scheduled: 0, sent: 0, failed: 0 },
+  folderCounts = { all: 0, draft: 0, scheduled: 0, sending: 0, sent: 0, failed: 0 },
 }: OutlookSidebarProps) {
   const { data: session } = useSession();
   const { theme, toggleTheme } = useUIStore();
@@ -83,6 +84,7 @@ export function OutlookSidebar({
       items: [
         { id: 'draft', label: 'Πρόχειρα', icon: FileText, count: folderCounts.draft },
         { id: 'scheduled', label: 'Προγραμματισμένα', icon: Clock, count: folderCounts.scheduled },
+        { id: 'sending', label: 'Αποστολή', icon: Mail, count: folderCounts.sending },
         { id: 'sent', label: 'Απεσταλμένα', icon: Send, count: folderCounts.sent },
         { id: 'failed', label: 'Αποτυχημένα', icon: AlertCircle, count: folderCounts.failed, badge: folderCounts.failed > 0 ? 'alert' : undefined },
       ],
