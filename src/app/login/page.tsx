@@ -1,16 +1,25 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 function LoginContent() {
   const searchParams = useSearchParams();
   const error = searchParams.get('error');
-  const callbackUrl = searchParams.get('callbackUrl') || '/';
+  const callbackUrl = '/';
   const [email, setEmail] = useState('');
+  const router = useRouter();
+  const { status } = useSession();
+
+  // If already authenticated, don't leave the user on the login screen.
+  useEffect(() => {
+    if (status === 'authenticated') router.replace(callbackUrl);
+  }, [status, router, callbackUrl]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#14151a] to-[#1a1b23]">

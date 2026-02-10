@@ -90,6 +90,17 @@ function getDefaultOrgId(): string {
   return process.env.DEFAULT_ORG_ID?.trim() || 'org_kktires';
 }
 
+function normalizePossiblySecondsDate(date: unknown): unknown {
+  // If DB values were stored in seconds but interpreted as ms, they show up as 1970-era dates.
+  // Auth.js expects ms-based timestamps (Date.getTime()).
+  if (!(date instanceof Date)) return date;
+  const t = date.valueOf();
+  if (Number.isFinite(t) && t > 0 && t < 1_000_000_000_000) {
+    return new Date(t * 1000);
+  }
+  return date;
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: getAuthSecret(),
   trustHost: getTrustHost(),
@@ -110,6 +121,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async linkAccount(account: any) {
         return base.linkAccount?.(encryptAccountTokens(account));
       },
+      // Auth.js uses Date objects for expires; normalize in case the DB has second-based values.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async createSession(data: any) {
+        const session = await base.createSession?.(data);
+        if (!session) return session;
+        return { ...session, expires: normalizePossiblySecondsDate(session.expires) } as any;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async updateSession(data: any) {
+        const session = await base.updateSession?.(data);
+        if (!session) return session;
+        return { ...session, expires: normalizePossiblySecondsDate(session.expires) } as any;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async getSessionAndUser(sessionToken: any) {
+        const res = await base.getSessionAndUser?.(sessionToken);
+        if (!res) return res;
+        return {
+          ...res,
+          session: { ...res.session, expires: normalizePossiblySecondsDate(res.session.expires) },
+        } as any;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async createVerificationToken(data: any) {
+        const token = await base.createVerificationToken?.(data);
+        if (!token) return token;
+        return { ...token, expires: normalizePossiblySecondsDate(token.expires) } as any;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async useVerificationToken(params: any) {
+        const token = await base.useVerificationToken?.(params);
+        if (!token) return token;
+        return { ...token, expires: normalizePossiblySecondsDate(token.expires) } as any;
+      },
     } as any;
   })(),
   providers: (() => {
@@ -124,50 +169,56 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // Ensure the default org exists and the user is a member after successful sign-in.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async signIn({ user }: any) {
-      if (!user?.id) return;
+      // IMPORTANT: Do not block sign-in if org bootstrapping fails.
+      // Some environments might have partial schema/migrations during initial setup.
+      try {
+        if (!user?.id) return;
 
-      const orgId = getDefaultOrgId();
+        const orgId = getDefaultOrgId();
 
-      const existingOrg = await db.query.organizations.findFirst({
-        where: (o, { eq }) => eq(o.id, orgId),
-      });
-
-      if (!existingOrg) {
-        await db.insert(organizations).values({
-          id: orgId,
-          name: 'KK Tires',
-          slug: 'kktires',
-          settings: {
-            currency: 'EUR',
-            dateFormat: 'DD/MM/YYYY',
-            timeFormat: '24h',
-            timezone: 'Europe/Athens',
-            language: 'el',
-          },
-          subscriptionTier: 'premium',
-          createdAt: new Date(),
-          updatedAt: new Date(),
+        const existingOrg = await db.query.organizations.findFirst({
+          where: (o, { eq }) => eq(o.id, orgId),
         });
+
+        if (!existingOrg) {
+          await db.insert(organizations).values({
+            id: orgId,
+            name: 'KK Tires',
+            slug: 'kktires',
+            settings: {
+              currency: 'EUR',
+              dateFormat: 'DD/MM/YYYY',
+              timeFormat: '24h',
+              timezone: 'Europe/Athens',
+              language: 'el',
+            },
+            subscriptionTier: 'premium',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+
+        const existingMembership = await db.query.organizationMembers.findFirst({
+          where: (m, { and, eq }) => and(eq(m.userId, user.id), eq(m.orgId, orgId)),
+        });
+
+        if (existingMembership) return;
+
+        const [{ count: memberCount } = { count: 0 }] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(organizationMembers)
+          .where(eq(organizationMembers.orgId, orgId));
+
+        await db.insert(organizationMembers).values({
+          id: `mbr_${nanoid()}`,
+          userId: user.id,
+          orgId,
+          role: memberCount === 0 ? 'owner' : 'member',
+          joinedAt: new Date(),
+        });
+      } catch (error) {
+        console.error('[auth] signIn event org bootstrap failed (non-fatal):', error);
       }
-
-      const existingMembership = await db.query.organizationMembers.findFirst({
-        where: (m, { and, eq }) => and(eq(m.userId, user.id), eq(m.orgId, orgId)),
-      });
-
-      if (existingMembership) return;
-
-      const [{ count: memberCount } = { count: 0 }] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(organizationMembers)
-        .where(eq(organizationMembers.orgId, orgId));
-
-      await db.insert(organizationMembers).values({
-        id: `mbr_${nanoid()}`,
-        userId: user.id,
-        orgId,
-        role: memberCount === 0 ? 'owner' : 'member',
-        joinedAt: new Date(),
-      });
     },
   },
   callbacks: {
@@ -188,15 +239,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = user.id;
 
         const orgId = getDefaultOrgId();
-        const membership = await db.query.organizationMembers.findFirst({
-          where: (m, { and, eq }) => and(eq(m.userId, user.id), eq(m.orgId, orgId)),
-        });
+        try {
+          const membership = await db.query.organizationMembers.findFirst({
+            where: (m, { and, eq }) => and(eq(m.userId, user.id), eq(m.orgId, orgId)),
+          });
 
-        session.user.currentOrgId = membership?.orgId || orgId;
-        session.user.currentOrgRole = (membership?.role || 'member') as
-          | 'owner'
-          | 'admin'
-          | 'member';
+          session.user.currentOrgId = membership?.orgId || orgId;
+          session.user.currentOrgRole = (membership?.role || 'member') as
+            | 'owner'
+            | 'admin'
+            | 'member';
+        } catch (error) {
+          console.error('[auth] session org lookup failed (non-fatal):', error);
+          session.user.currentOrgId = orgId;
+          session.user.currentOrgRole = 'member';
+        }
       }
       return session;
     },
@@ -208,5 +265,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
     strategy: 'database',
   },
-  debug: process.env.NODE_ENV !== 'production',
+  debug: process.env.NODE_ENV !== 'production' || process.env.AUTH_DEBUG === '1',
+  logger: {
+    error(code, metadata) {
+      console.error('[auth] error', code, metadata);
+    },
+    warn(code) {
+      console.warn('[auth] warn', code);
+    },
+    debug(code, metadata) {
+      if (process.env.AUTH_DEBUG === '1') {
+        console.log('[auth] debug', code, metadata);
+      }
+    },
+  },
 }); 
