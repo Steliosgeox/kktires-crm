@@ -76,7 +76,15 @@ function LoginContent() {
                   <code className="px-1 rounded bg-white/10">AUTH_ALLOWED_EMAILS</code>.
                 </>
               )}
-              {!['AccessDenied', 'OAuthCallback', 'Configuration'].includes(error) && (
+              {error === 'Verification' && (
+                <>
+                  <strong className="block mb-1">Σφάλμα επιβεβαίωσης</strong>
+                  Το link σύνδεσης έχει λήξει, έχει ήδη χρησιμοποιηθεί ή δημιουργήθηκε με διαφορετικό{' '}
+                  <code className="px-1 rounded bg-white/10">NEXTAUTH_SECRET</code>. Ζητήστε νέο link και πατήστε το
+                  μία φορά.
+                </>
+              )}
+              {!['AccessDenied', 'OAuthCallback', 'Configuration', 'Verification'].includes(error) && (
                 <>
                   <strong className="block mb-1">Σφάλμα</strong>
                   {error}

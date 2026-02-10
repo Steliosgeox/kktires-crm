@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// NOTE: Next.js 16 deprecates the `middleware.ts` convention in favor of `proxy.ts`.
+// This file is the direct replacement for the previous rate-limiting middleware.
+
 // Rate limiting map (simple in-memory, use Redis in production at scale)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT = 100; // requests per minute
@@ -22,7 +25,7 @@ function checkRateLimit(ip: string): boolean {
   return true;
 }
 
-export default function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   const isApiRoute = pathname.startsWith('/api');
@@ -60,6 +63,9 @@ export default function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
+export default proxy;
+
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|icons|manifest.json).*)'],
 };
+

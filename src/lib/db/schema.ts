@@ -52,7 +52,9 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   name: text('name'),
   email: text('email').notNull().unique(),
-  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
+  // Auth.js / NextAuth expects ms timestamps for these core auth fields.
+  // Using `timestamp` (seconds) causes Email sign-in tokens to appear instantly expired.
+  emailVerified: integer('emailVerified', { mode: 'timestamp_ms' }),
   image: text('image'),
   avatar: text('avatar'),
   passwordHash: text('password_hash'),
@@ -64,7 +66,7 @@ export const users = sqliteTable('users', {
 export const sessions = sqliteTable('sessions', {
   sessionToken: text('sessionToken').primaryKey(),
   userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expires: integer('expires', { mode: 'timestamp' }).notNull(),
+  expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
 });
 
 // Accounts table - compatible with NextAuth (for OAuth providers)
@@ -89,7 +91,7 @@ export const accounts = sqliteTable('accounts', {
 export const verificationTokens = sqliteTable('verification_tokens', {
   identifier: text('identifier').notNull(),
   token: text('token').notNull().unique(),
-  expires: integer('expires', { mode: 'timestamp' }).notNull(),
+  expires: integer('expires', { mode: 'timestamp_ms' }).notNull(),
 });
 
 // ============================================
