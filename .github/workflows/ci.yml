@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./ci.db
+      DATABASE_AUTH_TOKEN: ""
+      AUTH_SECRET: test
+      NEXTAUTH_SECRET: test
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_ALLOWED_EMAILS: test@example.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: DB Migrate (SQLite)
+        run: npm run db:migrate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit Tests
+        run: npm test
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E Tests (Playwright)
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build

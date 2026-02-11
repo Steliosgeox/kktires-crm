@@ -6,6 +6,7 @@ import { X, Send, Save, Sparkles, User, Mail, ChevronDown } from 'lucide-react';
 import { GlassModal } from '@/components/ui/glass-modal';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
+import { toast } from '@/lib/stores/ui-store';
 
 interface EmailComposerProps {
   isOpen: boolean;
@@ -67,7 +68,7 @@ export function EmailComposer({
 
   const handleAiAssist = async () => {
     if (!content.trim()) {
-      alert('Γράψτε πρώτα ένα μήνυμα για να βελτιωθεί με AI');
+      toast.warning('Χρειάζεται μήνυμα', 'Γράψτε πρώτα ένα μήνυμα για να βελτιωθεί με AI');
       return;
     }
 
@@ -89,6 +90,7 @@ export function EmailComposer({
       }
     } catch (error) {
       console.error('AI assist error:', error);
+      toast.error('Σφάλμα AI', 'Αποτυχία βελτίωσης μηνύματος. Δοκιμάστε ξανά.');
     } finally {
       setAiGenerating(false);
     }
@@ -96,7 +98,7 @@ export function EmailComposer({
 
   const handleSend = async () => {
     if (!to || !subject || !content) {
-      alert('Συμπληρώστε όλα τα πεδία');
+      toast.warning('Λείπουν πεδία', 'Συμπληρώστε όλα τα πεδία');
       return;
     }
 
@@ -120,12 +122,12 @@ export function EmailComposer({
         onClose();
       } else {
         onSend?.({ success: false, message: result.error });
-        alert(result.error || 'Αποτυχία αποστολής');
+        toast.error('Αποτυχία αποστολής', result.error || undefined);
       }
     } catch (error) {
       console.error('Send error:', error);
       onSend?.({ success: false, message: 'Network error' });
-      alert('Σφάλμα δικτύου');
+      toast.error('Σφάλμα δικτύου');
     } finally {
       setSending(false);
     }
@@ -146,12 +148,15 @@ export function EmailComposer({
       });
 
       if (response.ok) {
-        alert('Αποθηκεύτηκε ως πρόχειρο');
+        toast.success('Αποθηκεύτηκε', 'Αποθηκεύτηκε ως πρόχειρο');
         onClose();
+      } else {
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        toast.error('Αποτυχία αποθήκευσης', result?.error || undefined);
       }
     } catch (error) {
       console.error('Save draft error:', error);
-      alert('Αποτυχία αποθήκευσης');
+      toast.error('Αποτυχία αποθήκευσης');
     }
   };
 

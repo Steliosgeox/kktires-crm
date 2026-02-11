@@ -7,6 +7,8 @@ import { OutlookSidebar } from '@/components/email/outlook-sidebar';
 import { OutlookList } from '@/components/email/outlook-list';
 import { OutlookEditor } from '@/components/email/outlook-editor';
 import { OutlookRecipientDrawer } from '@/components/email/outlook-recipient-drawer';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { toast } from '@/lib/stores/ui-store';
 
 interface Campaign {
   id: string;
@@ -79,6 +81,9 @@ export default function EmailPage() {
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [recipientCount, setRecipientCount] = useState<number>(0);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Computed folder counts
   const folderCounts = useMemo(() => ({
@@ -126,14 +131,30 @@ export default function EmailPage() {
         fetch('/api/signatures'),
       ]);
 
+      const readError = async (res: Response) => {
+        try {
+          const data = await res.json();
+          if (data?.error) return String(data.error);
+        } catch {
+          // ignore
+        }
+        return `${res.status} ${res.statusText}`.trim() || 'Request failed';
+      };
+
+      const failures: string[] = [];
+
       if (campaignsRes.ok) {
         const data = await campaignsRes.json();
         setCampaigns(data.campaigns || []);
+      } else {
+        failures.push(`Campaigns: ${await readError(campaignsRes)}`);
       }
 
       if (templatesRes.ok) {
         const data = await templatesRes.json();
         setTemplates(data.templates || []);
+      } else {
+        failures.push(`Templates: ${await readError(templatesRes)}`);
       }
 
       if (signaturesRes.ok) {
@@ -145,14 +166,27 @@ export default function EmailPage() {
         if (defaultSig) {
           setSelectedSignature(defaultSig.id);
         }
+      } else {
+        failures.push(`Signatures: ${await readError(signaturesRes)}`);
+      }
+
+      if (failures.length > 0) {
+        const msg = failures.join(' • ');
+        setError(msg);
+        toast.error('Αποτυχία φόρτωσης', msg);
+
+        if ([campaignsRes, templatesRes, signaturesRes].some((r) => r.status === 401)) {
+          router.push('/login');
+        }
       }
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Αποτυχία φόρτωσης δεδομένων');
+      toast.error('Αποτυχία φόρτωσης', 'Αποτυχία φόρτωσης δεδομένων');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     fetchData();
@@ -183,6 +217,15 @@ export default function EmailPage() {
 
   // Handle section change
   const handleSectionChange = (sectionId: string) => {
+    if (sectionId === 'automations') {
+      router.push('/email/automations');
+      return;
+    }
+    if (sectionId === 'segments') {
+      router.push('/segments');
+      return;
+    }
+
     setActiveSection(sectionId);
     setSelectedCampaignId(null);
     setIsEditing(false);
@@ -361,11 +404,16 @@ export default function EmailPage() {
   };
 
   // Handle delete
-  const handleDelete = async (id: string) => {
-    if (!confirm('Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το campaign;')) {
-      return;
-    }
+  const handleDelete = (id: string) => {
+    setDeleteId(id);
+    setDeleteOpen(true);
+  };
 
+  const confirmDelete = async () => {
+    const id = deleteId;
+    if (!id) return;
+
+    setDeleting(true);
     try {
       const response = await fetch(`/api/campaigns/${id}`, {
         method: 'DELETE',
@@ -382,9 +430,15 @@ export default function EmailPage() {
         setIsEditing(false);
         resetEditor();
       }
+      toast.success('Διαγράφηκε', 'Το campaign διαγράφηκε επιτυχώς.');
     } catch (err) {
       console.error('Error deleting campaign:', err);
       setError('Αποτυχία διαγραφής');
+      toast.error('Αποτυχία διαγραφής', 'Δεν ήταν δυνατή η διαγραφή του campaign.');
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+      setDeleteId(null);
     }
   };
 
@@ -401,9 +455,29 @@ export default function EmailPage() {
 
   // Determine what to show in the list
   const listType = activeSection === 'templates' ? 'templates' : 'campaigns';
+  const deleteCampaignName = deleteId ? campaigns.find((c) => c.id === deleteId)?.name : null;
 
   return (
     <div className="h-[calc(100vh-64px)]">
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => {
+          if (deleting) return;
+          setDeleteOpen(false);
+          setDeleteId(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Διαγραφή Campaign"
+        description={
+          deleteCampaignName
+            ? `Είστε σίγουροι ότι θέλετε να διαγράψετε το campaign \"${deleteCampaignName}\";`
+            : 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το campaign;'
+        }
+        confirmText="Διαγραφή"
+        cancelText="Ακύρωση"
+        variant="danger"
+        loading={deleting}
+      />
       <OutlookLayout
         sidebar={
           <OutlookSidebar

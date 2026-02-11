@@ -28,6 +28,7 @@ import {
   Trash2,
   Save,
 } from 'lucide-react';
+import { toast } from '@/lib/stores/ui-store';
 
 interface Template {
   id: string;
@@ -117,16 +118,48 @@ export function OutlookEditor({
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastAppliedRef = useRef<{ key: string; content: string } | null>(null);
 
   const totalRecipients = recipientCount ?? 0;
   const hasRecipients = totalRecipients > 0;
 
-  // Initialize editor content only once
+  // Keep the contentEditable in sync when switching campaigns (without clobbering user typing).
   useEffect(() => {
-    if (editorRef.current && content && !editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = content;
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const key = `${campaignId ?? 'new'}:${isNew ? 'new' : 'existing'}`;
+    const isFocused = editor.contains(document.activeElement);
+
+    // When changing campaigns/new state, clear immediately to avoid showing stale content.
+    if (!lastAppliedRef.current || lastAppliedRef.current.key !== key) {
+      lastAppliedRef.current = { key, content: '' };
+      if (!isFocused) editor.innerHTML = '';
+      return;
     }
-  }, [content]);
+
+    // Apply new content only if we're not actively editing.
+    const next = content || '';
+    if (isFocused) return;
+    if (lastAppliedRef.current.content === next) return;
+
+    editor.innerHTML = next;
+    lastAppliedRef.current.content = next;
+  }, [campaignId, isNew, content]);
+
+  const applyEditorCommand = (command: string, value?: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false, value);
+    setContent(editorRef.current.innerHTML);
+  };
+
+  const handleInsertLink = () => {
+    const raw = window.prompt('Εισάγετε URL');
+    if (!raw) return;
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    applyEditorCommand('createLink', url);
+  };
 
   const handleApplyTemplate = (template: Template) => {
     setCampaignName(template.name);
@@ -344,13 +377,13 @@ export function OutlookEditor({
             <button
               onClick={() => {
                 if (!scheduleDate || !scheduleTime) {
-                  alert('Επιλέξτε ημερομηνία και ώρα');
+                  toast.warning('Χρειάζεται ημερομηνία/ώρα', 'Επιλέξτε ημερομηνία και ώρα');
                   return;
                 }
 
                 const dt = new Date(`${scheduleDate}T${scheduleTime}:00`);
                 if (isNaN(dt.getTime())) {
-                  alert('Μη έγκυρη ημερομηνία/ώρα');
+                  toast.error('Μη έγκυρη ημερομηνία/ώρα', 'Ελέγξτε την ημερομηνία και την ώρα και δοκιμάστε ξανά.');
                   return;
                 }
 
@@ -552,34 +585,74 @@ export function OutlookEditor({
           >
             {/* Format Buttons */}
             <div className="flex items-center gap-0.5 pr-2 mr-2 border-r" style={{ borderColor: 'var(--outlook-border)' }}>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={() => applyEditorCommand('bold')}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Bold"
+              >
                 <Bold className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={() => applyEditorCommand('italic')}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Italic"
+              >
                 <Italic className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={() => applyEditorCommand('underline')}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Underline"
+              >
                 <Underline className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
             </div>
 
             <div className="flex items-center gap-0.5 pr-2 mr-2 border-r" style={{ borderColor: 'var(--outlook-border)' }}>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={() => applyEditorCommand('insertUnorderedList')}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Bullets"
+              >
                 <List className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={() => applyEditorCommand('insertOrderedList')}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Numbered list"
+              >
                 <ListOrdered className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={() => applyEditorCommand('justifyLeft')}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Align left"
+              >
                 <AlignLeft className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
             </div>
 
             <div className="flex items-center gap-0.5 pr-2 mr-2 border-r" style={{ borderColor: 'var(--outlook-border)' }}>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                onClick={handleInsertLink}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Insert link"
+              >
                 <Link className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
-              <button className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]">
+              <button
+                type="button"
+                disabled
+                className="p-1.5 rounded-md transition-colors opacity-50 cursor-not-allowed"
+                title="Not implemented yet"
+              >
                 <Image className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
             </div>

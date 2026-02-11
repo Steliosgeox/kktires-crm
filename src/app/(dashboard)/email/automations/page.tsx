@@ -3,6 +3,7 @@
 import { Suspense } from 'react';
 import { AutomationBuilder } from '@/components/email/automation-builder';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
+import { toast } from '@/lib/stores/ui-store';
 
 export default function AutomationsPage() {
   const handleSave = async (nodes: any[], edges: any[], name: string) => {
@@ -30,13 +31,13 @@ export default function AutomationsPage() {
       });
 
       if (response.ok) {
-        alert('Ο αυτοματισμός αποθηκεύτηκε επιτυχώς!');
+        toast.success('Αποθηκεύτηκε', 'Ο αυτοματισμός αποθηκεύτηκε επιτυχώς!');
       } else {
         throw new Error('Failed to save');
       }
     } catch (error) {
       console.error('Error saving automation:', error);
-      alert('Σφάλμα αποθήκευσης αυτοματισμού');
+      toast.error('Σφάλμα', 'Σφάλμα αποθήκευσης αυτοματισμού');
     }
   };
 

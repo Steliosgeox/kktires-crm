@@ -5,51 +5,23 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { signOut, useSession } from 'next-auth/react';
 import {
-  LayoutDashboard,
-  Users,
-  UserPlus,
-  Mail,
-  Map,
-  BarChart3,
-  CheckSquare,
-  Settings,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Tag,
-  FolderKanban,
-  Upload,
-  Download,
-  Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores/ui-store';
 import { GlassAvatar } from '@/components/ui/glass-avatar';
 import { GlassTooltip } from '@/components/ui/glass-tooltip';
-
-const navigation = [
-  { name: 'Αρχική', href: '/', icon: LayoutDashboard },
-  { name: 'Πελάτες', href: '/customers', icon: Users },
-  { name: 'Δυνητικοί', href: '/leads', icon: UserPlus },
-  { name: 'Ετικέτες', href: '/tags', icon: Tag },
-  { name: 'Τμήματα', href: '/segments', icon: FolderKanban },
-  { name: 'Εισαγωγή', href: '/import', icon: Upload },
-  { name: 'Εξαγωγή', href: '/export', icon: Download },
-  { name: 'Email Marketing', href: '/email', icon: Mail },
-  { name: 'Χάρτης', href: '/map', icon: Map },
-  { name: 'Στατιστικά', href: '/statistics', icon: BarChart3 },
-  { name: 'Εργασίες', href: '/tasks', icon: CheckSquare },
-];
-
-const bottomNavigation = [
-  { name: 'Μετεγκατάσταση', href: '/migrate', icon: Database },
-  { name: 'Ρυθμίσεις', href: '/settings', icon: Settings },
-];
+import { bottomNavigation, mainNavigation } from '@/components/layout/navigation';
 
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const { data: session } = useSession();
+  const rawName = session?.user?.name?.trim();
+  const email = session?.user?.email?.trim();
+  const name = rawName && rawName.toLowerCase() !== 'user' ? rawName : null;
 
   const role = (session?.user as any)?.currentOrgRole as string | undefined;
   const canAdmin = role === 'owner' || role === 'admin';
@@ -59,7 +31,7 @@ export function Sidebar() {
       initial={false}
       animate={{ width: sidebarCollapsed ? 72 : 260 }}
       transition={{ duration: 0.2 }}
-      className="fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-white/[0.08] bg-zinc-950/90 backdrop-blur-xl"
+      className="fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-white/[0.08] bg-zinc-950/90 backdrop-blur-xl lg:flex"
     >
       {/* Logo */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-white/[0.08]">
@@ -92,7 +64,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-        {navigation.map((item) => {
+        {mainNavigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
 
@@ -130,7 +102,7 @@ export function Sidebar() {
       {/* Bottom Navigation */}
       <div className="p-3 border-t border-white/[0.08] space-y-1">
         {bottomNavigation
-          .filter((item) => (item.href === '/migrate' ? canAdmin : true))
+          .filter((item) => (item.adminOnly ? canAdmin : true))
           .map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const Icon = item.icon;
@@ -174,17 +146,17 @@ export function Sidebar() {
           )}
         >
           <GlassAvatar
-            name={session?.user?.name || session?.user?.email || 'User'}
+            name={name || email || 'User'}
             src={(session?.user as any)?.image || undefined}
             size="sm"
           />
           {!sidebarCollapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">
-                {session?.user?.name || 'Χρήστης'}
+                {name || (email ? email.split('@')[0] : null) || 'Χρήστης'}
               </p>
               <p className="text-xs text-white/50 truncate">
-                {session?.user?.email || ''}
+                {email || ''}
               </p>
             </div>
           )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import {
   Map as MapIcon,
   Search,
@@ -23,6 +24,7 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
+import { toast } from '@/lib/stores/ui-store';
 
 interface CustomerLocation {
   id: string;
@@ -63,11 +65,13 @@ const categoryColors: Record<string, string> = {
 };
 
 export default function MapPage() {
+  const { data: session } = useSession();
   const [searchQuery, setSearchQuery] = useState('');
   const [customers, setCustomers] = useState<CustomerLocation[]>([]);
   const [cities, setCities] = useState<CityStats[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, geocoded: 0, withoutCoords: 0 });
   const [loading, setLoading] = useState(true);
+  const [backfillLoading, setBackfillLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerLocation | null>(null);
@@ -244,9 +248,31 @@ export default function MapPage() {
           googleMapRef.current?.setZoom(12);
         },
         () => {
-          alert('Δεν ήταν δυνατή η ανίχνευση της τοποθεσίας σας');
+          toast.error('Σφάλμα', 'Δεν ήταν δυνατή η ανίχνευση της τοποθεσίας σας');
         }
       );
+    }
+  };
+
+  const role = (session?.user as any)?.currentOrgRole as string | undefined;
+  const canAdmin = role === 'owner' || role === 'admin';
+
+  const handleGeocodeBackfill = async () => {
+    try {
+      setBackfillLoading(true);
+      const res = await fetch('/api/maps/geocode/backfill?limit=25', { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Backfill failed');
+
+      toast.success(
+        'Γεωκωδικοποίηση',
+        `Ενημερώθηκαν ${data?.updated ?? 0} πελάτες (processed: ${data?.processed ?? 0}).`
+      );
+      await fetchLocations(selectedCity);
+    } catch (e) {
+      toast.error('Γεωκωδικοποίηση', e instanceof Error ? e.message : 'Backfill failed');
+    } finally {
+      setBackfillLoading(false);
     }
   };
 
@@ -275,7 +301,7 @@ export default function MapPage() {
           >
             Ανανέωση
           </GlassButton>
-          <GlassButton variant="default" leftIcon={<Layers className="h-4 w-4" />}>
+          <GlassButton variant="default" leftIcon={<Layers className="h-4 w-4" />} disabled title="Not implemented yet">
             Επίπεδα
           </GlassButton>
         </div>
@@ -400,6 +426,27 @@ export default function MapPage() {
                 <span className="font-medium text-amber-400">{loading ? <GlassSkeleton className="h-5 w-12" /> : stats.withoutCoords.toLocaleString()}</span>
               </div>
             </div>
+
+            {!loading && stats.withoutCoords > 0 && (
+              <div className="mt-4 pt-4 border-t border-white/[0.08]">
+                <p className="text-xs text-white/50 mb-3">
+                  {canAdmin
+                    ? 'Μπορείτε να τρέξετε γεωκωδικοποίηση για πελάτες χωρίς αποθηκευμένες συντεταγμένες.'
+                    : 'Ζητήστε από admin να τρέξει γεωκωδικοποίηση για πελάτες χωρίς συντεταγμένες.'}
+                </p>
+                {canAdmin && (
+                  <GlassButton
+                    variant="primary"
+                    size="sm"
+                    leftIcon={<MapPin className={`h-4 w-4 ${backfillLoading ? 'animate-pulse' : ''}`} />}
+                    onClick={handleGeocodeBackfill}
+                    disabled={backfillLoading}
+                  >
+                    {backfillLoading ? 'Γεωκωδικοποίηση...' : 'Γεωκωδικοποίηση Πελατών'}
+                  </GlassButton>
+                )}
+              </div>
+            )}
           </GlassCard>
 
           {/* Filter by City */}

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Wand2, ListChecks, Loader2, Bold, Italic, List, Link as LinkIcon } from 'lucide-react';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassDropdown } from '@/components/ui/glass-dropdown';
+import { toast } from '@/lib/stores/ui-store';
 
 interface RichTextEmailEditorProps {
   value: string;
@@ -80,7 +81,7 @@ export function RichTextEmailEditor({
   const handleAiExpand = async () => {
     const textContent = editorRef.current?.innerText || value;
     if (!textContent.trim()) {
-      alert('Γράψτε πρώτα μια σύντομη σημείωση για να επεκταθεί');
+      toast.warning('Χρειάζεται περιεχόμενο', 'Γράψτε πρώτα μια σύντομη σημείωση για να επεκταθεί');
       return;
     }
 
@@ -118,7 +119,7 @@ export function RichTextEmailEditor({
   const handleAiImprove = async (tone: 'professional' | 'friendly' | 'formal' = 'professional') => {
     const textContent = editorRef.current?.innerText || value;
     if (!textContent.trim()) {
-      alert('Γράψτε πρώτα περιεχόμενο για βελτίωση');
+      toast.warning('Χρειάζεται περιεχόμενο', 'Γράψτε πρώτα περιεχόμενο για βελτίωση');
       return;
     }
 
@@ -157,7 +158,7 @@ export function RichTextEmailEditor({
   const handleAiSubjectSuggestions = async () => {
     const textContent = editorRef.current?.innerText || value;
     if (!textContent.trim()) {
-      alert('Γράψτε πρώτα το περιεχόμενο του email');
+      toast.warning('Χρειάζεται περιεχόμενο', 'Γράψτε πρώτα το περιεχόμενο του email');
       return;
     }
 

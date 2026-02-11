@@ -15,6 +15,12 @@ This is a Next.js App Router CRM with an Outlook-style email/campaign UI. The ba
 3. Start:
    - `npm run dev`
 
+Useful checks:
+- `npm run audit:stubs` (finds dead clicks/placeholder routes/alert/confirm usage)
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
+
 ## Deploy On Vercel
 
 ### Required Environment Variables
@@ -32,6 +38,7 @@ Set these in Vercel Project Settings:
 - `EMAIL_TRACKING_SECRET` (signs tracking links/pixels)
 - `OAUTH_TOKEN_ENCRYPTION_KEY` (base64-encoded 32 bytes; encrypts OAuth tokens at rest)
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (only if you use the Map page)
+- `GOOGLE_GEOCODING_API_KEY` (recommended, server-side; used to backfill customer coordinates)
 
 ### Email Job Processing (Vercel Cron)
 
@@ -52,6 +59,11 @@ Optional knobs:
 Optional protection:
 
 - `CRON_SECRET`: if set, `/api/cron/email-jobs` requires `Authorization: Bearer <CRON_SECRET>` (or the `x-vercel-cron` header).
+
+### Customer Geocoding Backfill (Vercel Cron)
+
+- `vercel.json` also schedules `GET /api/cron/geocode-customers` hourly.
+- This fills in missing `customers.latitude/longitude` via Google Geocoding (cached in `geocode_cache`).
 
 ## Notes
 

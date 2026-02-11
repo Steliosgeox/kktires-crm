@@ -94,10 +94,8 @@ export function OutlookSidebar({
       collapsible: true,
       items: [
         { id: 'templates', label: 'Templates', icon: FileText },
-        { id: 'contacts', label: 'Επαφές', icon: Users },
         { id: 'segments', label: 'Τμήματα', icon: Tag },
         { id: 'automations', label: 'Αυτοματισμοί', icon: Zap },
-        { id: 'analytics', label: 'Αναλυτικά', icon: BarChart3 },
       ],
     },
   ];

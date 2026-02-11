@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { toast } from '@/lib/stores/ui-store';
 
 interface Segment {
   id: string;
@@ -63,6 +65,9 @@ export default function SegmentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [newSegment, setNewSegment] = useState({
     name: '',
@@ -120,15 +125,32 @@ export default function SegmentsPage() {
     }
   }
 
-  async function handleDeleteSegment(segmentId: string) {
-    if (!confirm('Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το τμήμα;')) return;
+  function handleDeleteSegment(segmentId: string) {
+    setDeleteId(segmentId);
+    setDeleteOpen(true);
+  }
+
+  async function confirmDeleteSegment() {
+    const segmentId = deleteId;
+    if (!segmentId) return;
+
+    setDeleting(true);
     try {
       const res = await fetch(`/api/segments/${segmentId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchSegments();
+        toast.success('Διαγράφηκε', 'Το τμήμα διαγράφηκε επιτυχώς.');
+      } else {
+        const data = await res.json().catch(() => null) as { error?: string } | null;
+        toast.error('Αποτυχία διαγραφής', data?.error || undefined);
       }
     } catch (error) {
       console.error('Failed to delete segment:', error);
+      toast.error('Αποτυχία διαγραφής');
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+      setDeleteId(null);
     }
   }
 
@@ -171,13 +193,33 @@ export default function SegmentsPage() {
     segment.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     segment.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const deleteSegmentName = deleteId ? segments.find((s) => s.id === deleteId)?.name : null;
 
   const getFieldType = (fieldValue: string) => {
     return FILTER_FIELDS.find(f => f.value === fieldValue)?.type || 'text';
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => {
+          if (deleting) return;
+          setDeleteOpen(false);
+          setDeleteId(null);
+        }}
+        onConfirm={confirmDeleteSegment}
+        title="Διαγραφή Τμήματος"
+        description={
+          deleteSegmentName
+            ? `Είστε σίγουροι ότι θέλετε να διαγράψετε το τμήμα \"${deleteSegmentName}\";`
+            : 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το τμήμα;'
+        }
+        confirmText="Διαγραφή"
+        cancelText="Ακύρωση"
+        variant="danger"
+        loading={deleting}
+      />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -488,4 +530,3 @@ export default function SegmentsPage() {
     </div>
   );
 }
-

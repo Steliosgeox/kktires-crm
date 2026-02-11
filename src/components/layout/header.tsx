@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { Search, Bell, Command, Menu, Sun, Moon, LogOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, Bell, Command, Menu, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/lib/stores/ui-store';
-import { useThemeStore } from '@/lib/stores/theme-store';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassAvatar } from '@/components/ui/glass-avatar';
@@ -17,23 +17,35 @@ interface HeaderProps {
 }
 
 export function Header({ title, showSearch = true }: HeaderProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const { data: session } = useSession();
   const { 
     sidebarCollapsed, 
     openCommandPalette, 
     setNotificationsOpen,
-    setMobileMenuOpen 
+    setMobileMenuOpen,
+    theme,
+    toggleTheme,
   } = useUIStore();
-  const { theme, toggleTheme } = useThemeStore();
 
   const handleSignOut = () => {
     signOut({ callbackUrl: '/login' });
   };
 
+  const rawName = session?.user?.name?.trim();
+  const email = session?.user?.email?.trim();
+  const name = rawName && rawName.toLowerCase() !== 'user' ? rawName : null;
+
+  const avatarName = name || email || 'User';
+  const userLabel =
+    name?.split(' ')[0] ||
+    email?.split('@')[0] ||
+    'User';
+
   const userMenuItems = [
-    { key: 'profile', label: 'Προφίλ', onClick: () => {} },
-    { key: 'settings', label: 'Ρυθμίσεις', onClick: () => {} },
+    { key: 'profile', label: 'Προφίλ', onClick: () => router.push('/settings?section=profile') },
+    { key: 'settings', label: 'Ρυθμίσεις', onClick: () => router.push('/settings') },
     { key: 'divider', label: '', divider: true },
     { key: 'logout', label: 'Αποσύνδεση', onClick: handleSignOut, danger: true },
   ];
@@ -43,8 +55,9 @@ export function Header({ title, showSearch = true }: HeaderProps) {
       className={cn(
         'fixed top-0 right-0 z-30 flex h-16 items-center justify-between border-b border-white/[0.08] bg-zinc-950/80 backdrop-blur-xl px-6 transition-all duration-200',
         {
-          'left-[260px]': !sidebarCollapsed,
-          'left-[72px]': sidebarCollapsed,
+          'left-0': true,
+          'lg:left-[260px]': !sidebarCollapsed,
+          'lg:left-[72px]': sidebarCollapsed,
         }
       )}
     >
@@ -120,15 +133,13 @@ export function Header({ title, showSearch = true }: HeaderProps) {
           trigger={
             <button className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-white/[0.05] transition-colors">
               <GlassAvatar 
-                name={session?.user?.name || 'User'} 
+                name={avatarName}
                 src={session?.user?.image || undefined}
                 size="sm" 
               />
-              {session?.user?.name && (
-                <span className="hidden lg:block text-sm text-white/70 max-w-[120px] truncate">
-                  {session.user.name.split(' ')[0]}
-                </span>
-              )}
+              <span className="hidden lg:block text-sm text-white/70 max-w-[160px] truncate">
+                {userLabel}
+              </span>
             </button>
           }
           items={userMenuItems}
@@ -137,4 +148,3 @@ export function Header({ title, showSearch = true }: HeaderProps) {
     </header>
   );
 }
-

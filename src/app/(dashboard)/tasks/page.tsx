@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckSquare,
   Plus,
@@ -12,6 +13,7 @@ import {
   CheckCircle,
   Circle,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -19,7 +21,11 @@ import { GlassInput } from '@/components/ui/glass-input';
 import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassTabs, GlassTabsList, GlassTabsTrigger, GlassTabsContent } from '@/components/ui/glass-tabs';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
-import { cn, getTaskPriorityLabel, getTaskStatusLabel } from '@/lib/utils';
+import { GlassModal, GlassModalBody, GlassModalFooter } from '@/components/ui/glass-modal';
+import { GlassSelect } from '@/components/ui/glass-select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { toast } from '@/lib/stores/ui-store';
+import { cn, getTaskPriorityLabel } from '@/lib/utils';
 
 interface Task {
   id: string;
@@ -52,7 +58,15 @@ const statusIcons = {
   done: CheckCircle,
 };
 
-function TaskItem({ task }: { task: Task }) {
+function TaskItem({
+  task,
+  onToggleStatus,
+  onOpen,
+}: {
+  task: Task;
+  onToggleStatus: (task: Task) => void;
+  onOpen: (task: Task) => void;
+}) {
   const StatusIcon = statusIcons[task.status as keyof typeof statusIcons] || Circle;
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
 
@@ -62,8 +76,22 @@ function TaskItem({ task }: { task: Task }) {
         'flex items-start gap-4 rounded-xl border border-white/[0.05] p-4 transition-colors hover:bg-white/[0.02]',
         { 'border-red-500/30 bg-red-500/5': isOverdue }
       )}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(task)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onOpen(task);
+      }}
     >
-      <button className="mt-0.5">
+      <button
+        type="button"
+        className="mt-0.5"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleStatus(task);
+        }}
+        title="Αλλαγή κατάστασης"
+      >
         <StatusIcon
           className={cn('h-5 w-5', {
             'text-white/30': task.status === 'todo',
@@ -114,14 +142,36 @@ function TaskItem({ task }: { task: Task }) {
 }
 
 export default function TasksPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [counts, setCounts] = useState<TaskCounts>({ todo: 0, in_progress: 0, done: 0, overdue: 0 });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    dueDate: '',
+  });
 
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      openCreate();
+      router.replace('/tasks');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   async function fetchTasks() {
     setLoading(true);
@@ -138,6 +188,108 @@ export default function TasksPage() {
       setLoading(false);
     }
   }
+
+  const openCreate = () => {
+    setEditingTask(null);
+    setForm({
+      title: '',
+      description: '',
+      status: 'todo',
+      priority: 'medium',
+      dueDate: '',
+    });
+    setModalOpen(true);
+  };
+
+  const openEdit = (task: Task) => {
+    setEditingTask(task);
+    setForm({
+      title: task.title || '',
+      description: task.description || '',
+      status: task.status || 'todo',
+      priority: task.priority || 'medium',
+      dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : '',
+    });
+    setModalOpen(true);
+  };
+
+  const cycleStatus = (status: string) => {
+    if (status === 'todo') return 'in_progress';
+    if (status === 'in_progress') return 'done';
+    return 'todo';
+  };
+
+  const handleToggleStatus = async (task: Task) => {
+    try {
+      const next = cycleStatus(task.status);
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to update task');
+      toast.success('Ενημερώθηκε', 'Η κατάσταση της εργασίας ενημερώθηκε.');
+      await fetchTasks();
+    } catch (e) {
+      toast.error('Σφάλμα', e instanceof Error ? e.message : 'Failed to update task');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) {
+      toast.error('Σφάλμα', 'Ο τίτλος είναι υποχρεωτικός.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        status: form.status,
+        priority: form.priority,
+        dueDate: form.dueDate || null,
+      };
+
+      const url = editingTask ? `/api/tasks/${editingTask.id}` : '/api/tasks';
+      const method = editingTask ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to save task');
+
+      toast.success('Αποθηκεύτηκε', editingTask ? 'Η εργασία ενημερώθηκε.' : 'Η εργασία δημιουργήθηκε.');
+      setModalOpen(false);
+      await fetchTasks();
+    } catch (e) {
+      toast.error('Αποτυχία αποθήκευσης', e instanceof Error ? e.message : 'Failed to save task');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!editingTask) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/tasks/${editingTask.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to delete task');
+      toast.success('Διαγράφηκε', 'Η εργασία διαγράφηκε.');
+      setDeleteDialogOpen(false);
+      setModalOpen(false);
+      await fetchTasks();
+    } catch (e) {
+      toast.error('Αποτυχία διαγραφής', e instanceof Error ? e.message : 'Failed to delete task');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const filteredTasks = tasks.filter(task => 
     task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -164,7 +316,7 @@ export default function TasksPage() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Ανανέωση
           </GlassButton>
-          <GlassButton variant="primary" leftIcon={<Plus className="h-4 w-4" />}>
+          <GlassButton variant="primary" leftIcon={<Plus className="h-4 w-4" />} onClick={openCreate}>
             Νέα Εργασία
           </GlassButton>
         </div>
@@ -228,7 +380,7 @@ export default function TasksPage() {
             leftIcon={<CheckSquare className="h-4 w-4" />}
           />
         </div>
-        <GlassButton variant="default" leftIcon={<Filter className="h-4 w-4" />}>
+        <GlassButton variant="default" leftIcon={<Filter className="h-4 w-4" />} disabled title="Not implemented yet">
           Φίλτρα
         </GlassButton>
       </div>
@@ -251,7 +403,14 @@ export default function TasksPage() {
 
           <GlassTabsContent value="all" className="mt-6 space-y-3">
             {filteredTasks.length > 0 ? (
-              filteredTasks.map((task) => <TaskItem key={task.id} task={task} />)
+              filteredTasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onToggleStatus={handleToggleStatus}
+                  onOpen={openEdit}
+                />
+              ))
             ) : (
               <div className="text-center py-12">
                 <CheckSquare className="h-12 w-12 text-white/20 mx-auto mb-4" />
@@ -262,7 +421,14 @@ export default function TasksPage() {
 
           <GlassTabsContent value="todo" className="mt-6 space-y-3">
             {todoTasks.length > 0 ? (
-              todoTasks.map((task) => <TaskItem key={task.id} task={task} />)
+              todoTasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onToggleStatus={handleToggleStatus}
+                  onOpen={openEdit}
+                />
+              ))
             ) : (
               <p className="text-white/50 text-center py-8">Καμία εργασία προς υλοποίηση</p>
             )}
@@ -270,7 +436,14 @@ export default function TasksPage() {
 
           <GlassTabsContent value="in_progress" className="mt-6 space-y-3">
             {inProgressTasks.length > 0 ? (
-              inProgressTasks.map((task) => <TaskItem key={task.id} task={task} />)
+              inProgressTasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onToggleStatus={handleToggleStatus}
+                  onOpen={openEdit}
+                />
+              ))
             ) : (
               <p className="text-white/50 text-center py-8">Καμία εργασία σε εξέλιξη</p>
             )}
@@ -278,13 +451,110 @@ export default function TasksPage() {
 
           <GlassTabsContent value="done" className="mt-6 space-y-3">
             {doneTasks.length > 0 ? (
-              doneTasks.map((task) => <TaskItem key={task.id} task={task} />)
+              doneTasks.map((task) => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  onToggleStatus={handleToggleStatus}
+                  onOpen={openEdit}
+                />
+              ))
             ) : (
               <p className="text-white/50 text-center py-8">Καμία ολοκληρωμένη εργασία</p>
             )}
           </GlassTabsContent>
         </GlassTabs>
       )}
+
+      <GlassModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingTask ? 'Επεξεργασία Εργασίας' : 'Νέα Εργασία'}
+        size="md"
+      >
+        <GlassModalBody>
+          <div className="space-y-5">
+            <GlassInput
+              label="Τίτλος *"
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            />
+            <div>
+              <label className="mb-2 block text-sm font-medium text-white/70">Περιγραφή</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                rows={4}
+                className="w-full rounded-md border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/90 placeholder:text-white/40 backdrop-blur-xl shadow-sm transition-all duration-150 outline-none focus:border-cyan-500/50 focus:shadow-[0_0_20px_rgba(14,165,233,0.2)]"
+              />
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <GlassSelect
+                label="Κατάσταση"
+                value={form.status}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                options={[
+                  { value: 'todo', label: 'Προς Υλοποίηση' },
+                  { value: 'in_progress', label: 'Σε Εξέλιξη' },
+                  { value: 'done', label: 'Ολοκληρωμένη' },
+                ]}
+              />
+              <GlassSelect
+                label="Προτεραιότητα"
+                value={form.priority}
+                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
+                options={[
+                  { value: 'low', label: 'Χαμηλή' },
+                  { value: 'medium', label: 'Μέτρια' },
+                  { value: 'high', label: 'Υψηλή' },
+                ]}
+              />
+            </div>
+
+            <GlassInput
+              label="Ημερομηνία Λήξης"
+              type="date"
+              value={form.dueDate}
+              onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+            />
+          </div>
+        </GlassModalBody>
+        <GlassModalFooter className={editingTask ? 'justify-between' : undefined}>
+          {editingTask ? (
+            <GlassButton
+              variant="danger"
+              onClick={() => setDeleteDialogOpen(true)}
+              leftIcon={<Trash2 className="h-4 w-4" />}
+              disabled={saving}
+            >
+              Διαγραφή
+            </GlassButton>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-3">
+            <GlassButton variant="ghost" onClick={() => setModalOpen(false)} disabled={saving}>
+              Ακύρωση
+            </GlassButton>
+            <GlassButton variant="primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+            </GlassButton>
+          </div>
+        </GlassModalFooter>
+      </GlassModal>
+
+      <ConfirmDialog
+        isOpen={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Διαγραφή Εργασίας"
+        description="Είστε σίγουροι ότι θέλετε να διαγράψετε αυτή την εργασία; Η ενέργεια δεν μπορεί να αναιρεθεί."
+        confirmText="Διαγραφή"
+        cancelText="Ακύρωση"
+        variant="danger"
+      />
     </div>
   );
 }

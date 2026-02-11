@@ -93,7 +93,7 @@ export default function ExportPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Εξαγωγή Πελατών</h1>

@@ -4,7 +4,7 @@ const OFFLINE_URL = '/offline';
 // Assets to cache on install
 const STATIC_ASSETS = [
   '/',
-  '/offline',
+  OFFLINE_URL,
   '/manifest.json',
 ];
 
@@ -75,7 +75,7 @@ self.addEventListener('fetch', (event) => {
         
         // For navigation requests, return offline page
         if (event.request.mode === 'navigate') {
-          return caches.match('/offline');
+          return caches.match(OFFLINE_URL);
         }
         
         // Return empty response for other requests

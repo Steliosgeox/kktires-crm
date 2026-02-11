@@ -48,8 +48,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="el" className="dark">
+    <html lang="el" className="dark" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (() => {
+                try {
+                  const raw = localStorage.getItem('kktires-ui');
+                  const parsed = raw ? JSON.parse(raw) : null;
+                  const theme = parsed?.state?.theme;
+                  const t = theme === 'light' || theme === 'dark' ? theme : 'dark';
+                  document.documentElement.setAttribute('data-theme', t);
+                  document.documentElement.classList.remove('light', 'dark');
+                  document.documentElement.classList.add(t);
+                } catch (_) {
+                  // no-op
+                }
+              })();
+            `,
+          }}
+        />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />

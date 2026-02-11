@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
+import { toast } from '@/lib/stores/ui-store';
 
 interface ImportField {
   csvHeader: string;
@@ -67,7 +68,7 @@ export default function ImportPage() {
 
   const handleFile = (selectedFile: File) => {
     if (!selectedFile.name.endsWith('.csv')) {
-      alert('Παρακαλώ επιλέξτε αρχείο CSV');
+      toast.error('Λάθος τύπος αρχείου', 'Παρακαλώ επιλέξτε αρχείο CSV');
       return;
     }
 
@@ -188,7 +189,7 @@ export default function ImportPage() {
   const requiredFieldsMapped = fieldMappings.some(m => m.dbField === 'firstName');
 
   return (
-    <div className="space-y-6 p-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Εισαγωγή Πελατών</h1>
@@ -329,7 +330,7 @@ export default function ImportPage() {
                 <div className="flex items-center gap-2 mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400">
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
                   <p className="text-sm">
-                    Το πεδίο "Όνομα" είναι υποχρεωτικό. Αντιστοιχίστε μια στήλη σε αυτό.
+                    Το πεδίο &quot;Όνομα&quot; είναι υποχρεωτικό. Αντιστοιχίστε μια στήλη σε αυτό.
                   </p>
                 </div>
               )}
@@ -521,4 +522,3 @@ export default function ImportPage() {
     </div>
   );
 }
-

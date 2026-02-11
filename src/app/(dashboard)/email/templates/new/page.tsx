@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { TemplateBuilder } from '@/components/email/template-builder';
+import { toast } from '@/lib/stores/ui-store';
 
 export default function NewTemplatePage() {
   const router = useRouter();
@@ -23,14 +24,14 @@ export default function NewTemplatePage() {
       });
 
       if (response.ok) {
-        alert('Το template αποθηκεύτηκε επιτυχώς!');
+        toast.success('Αποθηκεύτηκε', 'Το template αποθηκεύτηκε επιτυχώς!');
         router.push('/email');
       } else {
         throw new Error('Failed to save');
       }
     } catch (error) {
       console.error('Error saving template:', error);
-      alert('Σφάλμα αποθήκευσης template');
+      toast.error('Σφάλμα', 'Σφάλμα αποθήκευσης template');
     }
   };
 

@@ -51,18 +51,17 @@ export function CommandPalette() {
   const commands: CommandItem[] = useMemo(
     () => [
       // Navigation
-      { id: 'nav-dashboard', title: 'Αρχική', icon: <BarChart3 className="h-4 w-4" />, action: () => router.push('/dashboard'), category: 'Πλοήγηση' },
-      { id: 'nav-customers', title: 'Πελάτες', icon: <Users className="h-4 w-4" />, action: () => router.push('/dashboard/customers'), category: 'Πλοήγηση' },
-      { id: 'nav-leads', title: 'Δυνητικοί', icon: <UserPlus className="h-4 w-4" />, action: () => router.push('/dashboard/leads'), category: 'Πλοήγηση' },
-      { id: 'nav-email', title: 'Email Marketing', icon: <Mail className="h-4 w-4" />, action: () => router.push('/dashboard/email'), category: 'Πλοήγηση' },
-      { id: 'nav-map', title: 'Χάρτης', icon: <Map className="h-4 w-4" />, action: () => router.push('/dashboard/map'), category: 'Πλοήγηση' },
-      { id: 'nav-tasks', title: 'Εργασίες', icon: <CheckSquare className="h-4 w-4" />, action: () => router.push('/dashboard/tasks'), category: 'Πλοήγηση' },
-      { id: 'nav-settings', title: 'Ρυθμίσεις', icon: <Settings className="h-4 w-4" />, action: () => router.push('/dashboard/settings'), category: 'Πλοήγηση' },
+      { id: 'nav-dashboard', title: 'Αρχική', icon: <BarChart3 className="h-4 w-4" />, action: () => router.push('/'), category: 'Πλοήγηση' },
+      { id: 'nav-customers', title: 'Πελάτες', icon: <Users className="h-4 w-4" />, action: () => router.push('/customers'), category: 'Πλοήγηση' },
+      { id: 'nav-leads', title: 'Δυνητικοί', icon: <UserPlus className="h-4 w-4" />, action: () => router.push('/leads'), category: 'Πλοήγηση' },
+      { id: 'nav-email', title: 'Email Marketing', icon: <Mail className="h-4 w-4" />, action: () => router.push('/email'), category: 'Πλοήγηση' },
+      { id: 'nav-map', title: 'Χάρτης', icon: <Map className="h-4 w-4" />, action: () => router.push('/map'), category: 'Πλοήγηση' },
+      { id: 'nav-tasks', title: 'Εργασίες', icon: <CheckSquare className="h-4 w-4" />, action: () => router.push('/tasks'), category: 'Πλοήγηση' },
+      { id: 'nav-settings', title: 'Ρυθμίσεις', icon: <Settings className="h-4 w-4" />, action: () => router.push('/settings'), category: 'Πλοήγηση' },
       // Quick Actions
-      { id: 'action-new-customer', title: 'Νέος Πελάτης', description: 'Δημιουργία νέου πελάτη', icon: <Plus className="h-4 w-4" />, action: () => router.push('/dashboard/customers?new=true'), category: 'Ενέργειες' },
-      { id: 'action-new-lead', title: 'Νέος Δυνητικός', description: 'Δημιουργία νέου δυνητικού', icon: <Plus className="h-4 w-4" />, action: () => router.push('/dashboard/leads?new=true'), category: 'Ενέργειες' },
-      { id: 'action-new-email', title: 'Νέο Email', description: 'Σύνταξη νέου email', icon: <Mail className="h-4 w-4" />, action: () => router.push('/dashboard/email/compose'), category: 'Ενέργειες' },
-      { id: 'action-new-task', title: 'Νέα Εργασία', description: 'Δημιουργία νέας εργασίας', icon: <CheckSquare className="h-4 w-4" />, action: () => router.push('/dashboard/tasks?new=true'), category: 'Ενέργειες' },
+      { id: 'action-new-customer', title: 'Νέος Πελάτης', description: 'Δημιουργία νέου πελάτη', icon: <Plus className="h-4 w-4" />, action: () => router.push('/customers?new=true'), category: 'Ενέργειες' },
+      { id: 'action-new-lead', title: 'Νέος Δυνητικός', description: 'Δημιουργία νέου δυνητικού', icon: <Plus className="h-4 w-4" />, action: () => router.push('/leads?new=true'), category: 'Ενέργειες' },
+      { id: 'action-new-task', title: 'Νέα Εργασία', description: 'Δημιουργία νέας εργασίας', icon: <CheckSquare className="h-4 w-4" />, action: () => router.push('/tasks?new=true'), category: 'Ενέργειες' },
     ],
     [router]
   );

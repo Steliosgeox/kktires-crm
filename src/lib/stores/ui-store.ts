@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+type Theme = 'dark' | 'light';
+
+function applyTheme(theme: Theme) {
+  if (typeof document === 'undefined') return;
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.remove('light', 'dark');
+  document.documentElement.classList.add(theme);
+}
+
 interface UIState {
   // Sidebar
   sidebarCollapsed: boolean;
@@ -8,8 +17,8 @@ interface UIState {
   setSidebarCollapsed: (collapsed: boolean) => void;
 
   // Theme
-  theme: 'dark' | 'light';
-  setTheme: (theme: 'dark' | 'light') => void;
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 
   // Command Palette
@@ -55,20 +64,11 @@ export const useUIStore = create<UIState>()(
       theme: 'dark',
       setTheme: (theme) => {
         set({ theme });
-        // Apply theme to document for CSS variable switching
-        if (typeof document !== 'undefined') {
-          document.documentElement.setAttribute('data-theme', theme);
-          document.documentElement.classList.remove('light', 'dark');
-          document.documentElement.classList.add(theme);
-        }
+        applyTheme(theme);
       },
       toggleTheme: () => set((state) => {
         const newTheme = state.theme === 'dark' ? 'light' : 'dark';
-        if (typeof document !== 'undefined') {
-          document.documentElement.setAttribute('data-theme', newTheme);
-          document.documentElement.classList.remove('light', 'dark');
-          document.documentElement.classList.add(newTheme);
-        }
+        applyTheme(newTheme);
         return { theme: newTheme };
       }),
 
@@ -107,6 +107,9 @@ export const useUIStore = create<UIState>()(
         sidebarCollapsed: state.sidebarCollapsed,
         theme: state.theme,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.theme) applyTheme(state.theme);
+      },
       // Skip automatic hydration to prevent SSR mismatch
       skipHydration: true,
     }

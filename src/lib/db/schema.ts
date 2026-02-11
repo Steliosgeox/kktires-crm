@@ -16,6 +16,13 @@ export const organizations = sqliteTable('organizations', {
     timeFormat: string;
     timezone: string;
     language: string;
+    companyProfile?: {
+      vatId?: string;
+      address?: string;
+      city?: string;
+      phone?: string;
+      website?: string;
+    };
   }>(),
   subscriptionTier: text('subscription_tier').default('free'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -617,6 +624,24 @@ export const notifications = sqliteTable('notifications', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 }, (table) => ({
   userReadIdx: index('notifications_user_read_idx').on(table.userId, table.isRead),
+}));
+
+export const userPreferences = sqliteTable('user_preferences', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  notifications: text('notifications', { mode: 'json' }).$type<{
+    email: boolean;
+    push: boolean;
+    birthdays: boolean;
+    tasks: boolean;
+    campaigns: boolean;
+  }>().notNull(),
+  theme: text('theme').notNull().default('dark'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  userOrgIdx: uniqueIndex('user_preferences_user_org_uidx').on(table.userId, table.orgId),
 }));
 
 // ============================================

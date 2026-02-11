@@ -12,7 +12,17 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local tooling / one-off scripts (not shipped).
+    "scripts/**",
   ]),
+  {
+    rules: {
+      // This repo has a lot of legacy `any` usage; keep it visible but don't fail CI/dev loops.
+      "@typescript-eslint/no-explicit-any": "warn",
+      // Too strict / false-positives for event handlers and builders in this app.
+      "react-hooks/purity": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

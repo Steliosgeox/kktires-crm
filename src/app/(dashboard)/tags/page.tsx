@@ -9,6 +9,8 @@ import {
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { toast } from '@/lib/stores/ui-store';
 
 interface TagData {
   id: string;
@@ -40,6 +42,9 @@ export default function TagsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [newTag, setNewTag] = useState({ name: '', color: '#3B82F6', description: '' });
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchTags();
@@ -105,15 +110,32 @@ export default function TagsPage() {
     }
   }
 
-  async function handleDeleteTag(tagId: string) {
-    if (!confirm('Είστε σίγουροι ότι θέλετε να διαγράψετε αυτή την ετικέτα;')) return;
+  function handleDeleteTag(tagId: string) {
+    setDeleteId(tagId);
+    setDeleteOpen(true);
+  }
+
+  async function confirmDeleteTag() {
+    const tagId = deleteId;
+    if (!tagId) return;
+
+    setDeleting(true);
     try {
       const res = await fetch(`/api/tags/${tagId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchTags();
+        toast.success('Διαγράφηκε', 'Η ετικέτα διαγράφηκε επιτυχώς.');
+      } else {
+        const data = await res.json().catch(() => null) as { error?: string } | null;
+        toast.error('Αποτυχία διαγραφής', data?.error || undefined);
       }
     } catch (error) {
       console.error('Failed to delete tag:', error);
+      toast.error('Αποτυχία διαγραφής');
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+      setDeleteId(null);
     }
   }
 
@@ -121,9 +143,29 @@ export default function TagsPage() {
     tag.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     tag.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const deleteTagName = deleteId ? tags.find((t) => t.id === deleteId)?.name : null;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
+      <ConfirmDialog
+        isOpen={deleteOpen}
+        onClose={() => {
+          if (deleting) return;
+          setDeleteOpen(false);
+          setDeleteId(null);
+        }}
+        onConfirm={confirmDeleteTag}
+        title="Διαγραφή Ετικέτας"
+        description={
+          deleteTagName
+            ? `Είστε σίγουροι ότι θέλετε να διαγράψετε την ετικέτα \"${deleteTagName}\";`
+            : 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτή την ετικέτα;'
+        }
+        confirmText="Διαγραφή"
+        cancelText="Ακύρωση"
+        variant="danger"
+        loading={deleting}
+      />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

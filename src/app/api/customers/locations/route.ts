@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     const city = searchParams.get('city');
 
     // Get all customers with their location data
-    let query = db
+    const query = db
       .select({
         id: customers.id,
         firstName: customers.firstName,
@@ -87,16 +87,22 @@ export async function GET(request: NextRequest) {
     const allCustomers = await query;
 
     // Process customers and add coordinates
-    const customersWithCoords = allCustomers.map(customer => {
-      let lat = customer.latitude;
-      let lng = customer.longitude;
-      
-      // If no coordinates, try to geocode from city
-      if ((!lat || !lng) && customer.city) {
+    const customersWithCoords = allCustomers.map((customer) => {
+      const hasExact =
+        typeof customer.latitude === 'number' &&
+        typeof customer.longitude === 'number';
+
+      let lat: number | null = hasExact ? customer.latitude : null;
+      let lng: number | null = hasExact ? customer.longitude : null;
+      let coordSource: 'exact' | 'cityFallback' | 'missing' = hasExact ? 'exact' : 'missing';
+
+      // If no stored coordinates, use a city fallback so the map doesn't look empty.
+      if (!hasExact && customer.city) {
         const coords = getCoordsForCity(customer.city);
         if (coords) {
           lat = coords.lat + stableJitter(`${customer.id}:lat`, 0.02);
           lng = coords.lng + stableJitter(`${customer.id}:lng`, 0.02);
+          coordSource = 'cityFallback';
         }
       }
 
@@ -104,14 +110,19 @@ export async function GET(request: NextRequest) {
         ...customer,
         latitude: lat,
         longitude: lng,
+        coordSource,
         displayName: customer.company || `${customer.firstName} ${customer.lastName || ''}`.trim(),
       };
-    }).filter(c => c.latitude && c.longitude);
+    });
+
+    const customersForMap = customersWithCoords.filter(
+      (c) => typeof c.latitude === 'number' && typeof c.longitude === 'number'
+    );
 
     // Filter by city if specified
     const filteredCustomers = city
-      ? customersWithCoords.filter(c => c.city?.toLowerCase().includes(city.toLowerCase()))
-      : customersWithCoords;
+      ? customersForMap.filter((c) => c.city?.toLowerCase().includes(city.toLowerCase()))
+      : customersForMap;
 
     // Calculate city stats
     const cityStats: Record<string, number> = {};
@@ -129,14 +140,16 @@ export async function GET(request: NextRequest) {
 
     // Calculate stats
     const totalCustomers = allCustomers.length;
-    const geocoded = customersWithCoords.length;
-    const withoutCoords = totalCustomers - geocoded;
+    const exactCount = customersWithCoords.filter((c) => c.coordSource === 'exact').length;
+    const fallbackCount = customersWithCoords.filter((c) => c.coordSource === 'cityFallback').length;
+    const withoutCoords = totalCustomers - exactCount;
 
     return NextResponse.json({
       customers: filteredCustomers,
       stats: {
         total: totalCustomers,
-        geocoded,
+        geocoded: exactCount,
+        fallback: fallbackCount,
         withoutCoords,
       },
       cities: topCities,
