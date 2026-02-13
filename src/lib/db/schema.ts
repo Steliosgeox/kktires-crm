@@ -377,6 +377,45 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   orgStatusIdx: index('campaigns_org_status_idx').on(table.orgId, table.status),
 }));
 
+export const emailAssets = sqliteTable('email_assets', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  uploaderUserId: text('uploader_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  blobUrl: text('blob_url').notNull(),
+  blobPath: text('blob_path').notNull(),
+  fileName: text('file_name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  kind: text('kind').notNull(), // image | file
+  width: integer('width'),
+  height: integer('height'),
+  sha256: text('sha256').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
+}, (table) => ({
+  orgCreatedIdx: index('email_assets_org_created_idx').on(table.orgId, table.createdAt),
+  orgKindIdx: index('email_assets_org_kind_idx').on(table.orgId, table.kind),
+  shaIdx: index('email_assets_sha_idx').on(table.sha256),
+}));
+
+export const campaignAssets = sqliteTable('campaign_assets', {
+  id: text('id').primaryKey(),
+  campaignId: text('campaign_id').notNull().references(() => emailCampaigns.id, { onDelete: 'cascade' }),
+  assetId: text('asset_id').notNull().references(() => emailAssets.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // inline_image | attachment
+  embedInline: integer('embed_inline', { mode: 'boolean' }).notNull().default(false),
+  displayWidthPx: integer('display_width_px'),
+  align: text('align'), // left | center | right
+  altText: text('alt_text'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  campaignRoleIdx: index('campaign_assets_campaign_role_idx').on(table.campaignId, table.role),
+  assetIdx: index('campaign_assets_asset_idx').on(table.assetId),
+}));
+
 // ============================================
 // EMAIL MARKETING: CAMPAIGN RECIPIENTS
 // ============================================
@@ -744,6 +783,10 @@ export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 export type EmailCampaign = typeof emailCampaigns.$inferSelect;
 export type NewEmailCampaign = typeof emailCampaigns.$inferInsert;
+export type EmailAsset = typeof emailAssets.$inferSelect;
+export type NewEmailAsset = typeof emailAssets.$inferInsert;
+export type CampaignAsset = typeof campaignAssets.$inferSelect;
+export type NewCampaignAsset = typeof campaignAssets.$inferInsert;
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type Lead = typeof leads.$inferSelect;

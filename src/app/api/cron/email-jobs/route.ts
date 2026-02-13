@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { processDueEmailJobs } from '@/server/email/process-jobs';
 import { createRequestId, jsonError } from '@/server/api/http';
 import { isCronAuthorized } from '@/server/cron/auth';
+import { cleanupOrphanEmailAssets } from '@/server/email/assets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,19 @@ export async function GET(request: Request) {
       maxJobs: Number.isFinite(maxJobs) ? maxJobs : 5,
     });
 
-    return NextResponse.json({ ...result, requestId });
+    const cleanupEnabled = (process.env.EMAIL_ASSET_CLEANUP_ENABLED || '1').trim() !== '0';
+    const cleanup =
+      cleanupEnabled
+        ? await cleanupOrphanEmailAssets({
+            olderThanHours: Number.parseInt(process.env.EMAIL_ASSET_CLEANUP_HOURS || '24', 10),
+            limit: Number.parseInt(process.env.EMAIL_ASSET_CLEANUP_LIMIT || '200', 10),
+          }).catch((error) => {
+            console.error(`[cron/email-jobs] requestId=${requestId} asset cleanup failed`, error);
+            return { cleaned: 0 };
+          })
+        : { cleaned: 0 };
+
+    return NextResponse.json({ ...result, cleanup, requestId });
   } catch (error) {
     console.error(`[cron/email-jobs] requestId=${requestId}`, error);
     return jsonError('Cron job failed', 500, 'INTERNAL_ERROR', requestId);

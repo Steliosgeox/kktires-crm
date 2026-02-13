@@ -14,6 +14,11 @@ import {
 } from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
+import {
+  migrateInlineDataImagesToAssets,
+  normalizeCampaignAssetsInput,
+  syncCampaignAssets,
+} from '@/server/email/assets';
 
 const campaignStatusSchema = z.enum([
   'draft',
@@ -28,11 +33,29 @@ const campaignStatusSchema = z.enum([
 const campaignCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   subject: z.string().trim().max(300).optional(),
-  content: z.string().max(5_000_000).optional(),
+  content: z.string().max(1_000_000).optional(),
   status: campaignStatusSchema.optional(),
   scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: z.unknown().optional(),
   signatureId: z.string().trim().max(64).optional().nullable(),
+  assets: z
+    .object({
+      attachments: z.array(z.string().trim().min(1).max(64)).max(200).optional(),
+      inlineImages: z
+        .array(
+          z.object({
+            assetId: z.string().trim().min(1).max(64),
+            embedInline: z.boolean().optional(),
+            widthPx: z.number().int().positive().max(2400).nullable().optional(),
+            align: z.enum(['left', 'center', 'right']).nullable().optional(),
+            alt: z.string().max(500).nullable().optional(),
+            sortOrder: z.number().int().min(0).max(10_000).optional(),
+          })
+        )
+        .max(500)
+        .optional(),
+    })
+    .optional(),
 });
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
@@ -177,7 +200,7 @@ export async function POST(request: NextRequest) {
       console.error(`[campaigns:post] requestId=${requestId} ensureOrganizationExists failed`, error);
     }
 
-    const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 6_000_000 });
+    const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 1_500_000 });
     const recipientFilters = normalizeRecipientFilters(body.recipientFilters);
     let totalRecipients = 0;
     try {
@@ -186,6 +209,21 @@ export async function POST(request: NextRequest) {
       // Avoid blocking draft creation due to recipient-count query drift; send path re-validates recipients.
       console.error(`[campaigns:post] requestId=${requestId} recipient count failed`, error);
     }
+    let content = body.content || '';
+    const migratedInline = await migrateInlineDataImagesToAssets({
+      html: content,
+      orgId,
+      uploaderUserId: session.user.id,
+    });
+    content = migratedInline.html;
+
+    const normalizedAssets = normalizeCampaignAssetsInput(body.assets);
+    for (const migrated of migratedInline.inlineImages) {
+      if (!normalizedAssets.inlineImages.some((item) => item.assetId === migrated.assetId)) {
+        normalizedAssets.inlineImages.push(migrated);
+      }
+    }
+
     let signatureId: string | null = null;
     if (body.signatureId) {
       const [signature] = await db
@@ -212,7 +250,7 @@ export async function POST(request: NextRequest) {
       orgId,
       name: body.name,
       subject: body.subject || body.name,
-      content: body.content || '',
+      content,
       status: body.status || 'draft',
       scheduledAt: scheduledAtDate,
       totalRecipients,
@@ -261,7 +299,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ...newCampaign[0], requestId }, { status: 201 });
+    const campaignId = newCampaign[0].id as string;
+    if (normalizedAssets.attachments.length > 0 || normalizedAssets.inlineImages.length > 0) {
+      try {
+        await syncCampaignAssets({
+          orgId,
+          campaignId,
+          assets: normalizedAssets,
+        });
+      } catch (error) {
+        await db.delete(emailCampaigns).where(eq(emailCampaigns.id, campaignId)).catch(() => undefined);
+        throw error;
+      }
+    }
+
+    return NextResponse.json({ ...newCampaign[0], requestId, assets: normalizedAssets }, { status: 201 });
   } catch (error) {
     return handleApiError('campaigns:post', error, requestId, {
       message: 'Failed to create campaign',

@@ -134,6 +134,13 @@ export async function sendSmtpEmailDetailed(params: {
   text?: string;
   headers?: Record<string, string>;
   from?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | Uint8Array;
+    contentType?: string;
+    cid?: string;
+    disposition?: 'inline' | 'attachment';
+  }>;
 }): Promise<SmtpSendResult> {
   const cfg = parseSmtpConfig();
   if (!cfg) {
@@ -155,6 +162,7 @@ export async function sendSmtpEmailDetailed(params: {
       html: params.html,
       text: params.text,
       headers: params.headers,
+      attachments: params.attachments,
     });
     return { ok: true, provider: 'smtp', messageId: info?.messageId };
   } catch (error) {
@@ -176,6 +184,13 @@ export async function sendSmtpEmail(params: {
   text?: string;
   headers?: Record<string, string>;
   from?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | Uint8Array;
+    contentType?: string;
+    cid?: string;
+    disposition?: 'inline' | 'attachment';
+  }>;
 }): Promise<boolean> {
   const result = await sendSmtpEmailDetailed(params);
   return result.ok;

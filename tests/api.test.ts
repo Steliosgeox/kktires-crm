@@ -682,6 +682,32 @@ describe('API routes (DB-backed)', () => {
     );
   });
 
+  it('email asset upload route enforces auth and validates file input', async () => {
+    const uploadRoute = await import('../src/app/api/email/assets/upload/route');
+
+    mockRequireSession.mockResolvedValueOnce(null);
+    const unauthForm = new FormData();
+    const unauthRes = await uploadRoute.POST(
+      new Request('http://localhost/api/email/assets/upload', {
+        method: 'POST',
+        body: unauthForm,
+      }) as any
+    );
+    expect(unauthRes.status).toBe(401);
+
+    const missingFileForm = new FormData();
+    const missingFileRes = await uploadRoute.POST(
+      new Request('http://localhost/api/email/assets/upload', {
+        method: 'POST',
+        body: missingFileForm,
+      }) as any
+    );
+    expect(missingFileRes.status).toBe(400);
+    const payload = await missingFileRes.json();
+    expect(payload.code).toBe('BAD_REQUEST');
+    expect(typeof payload.requestId).toBe('string');
+  });
+
   it('health route hides details unless authorized', async () => {
     const healthRoute = await import('../src/app/api/health/route');
 

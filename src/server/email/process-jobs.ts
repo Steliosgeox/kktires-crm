@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid';
 import { claimNextDueEmailJob, markEmailJobCompleted, markEmailJobFailed, yieldEmailJob } from './job-queue';
 import { selectRecipients } from './recipients';
 import { ensureEmailTransportReady, sendEmail } from './transport';
+import { applyAssetBundleToHtml, prepareCampaignAssetBundle } from './assets';
 import {
   appendUnsubscribeFooter,
   buildOpenPixelUrl,
@@ -345,6 +346,11 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
         })
       : null;
 
+  const campaignAssetBundle = await prepareCampaignAssetBundle({
+    orgId: job.orgId,
+    campaignId: job.campaignId,
+  });
+
   let processed = 0;
   let sent = 0;
   let failed = 0;
@@ -411,6 +417,9 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
 
             const subject = personalize(campaign.subject, vars);
             let content = appendSignatureHtml(personalize(campaign.content, vars), signature?.content || null);
+            const withAssets = applyAssetBundleToHtml(content, campaignAssetBundle);
+            content = withAssets.html;
+            const attachments = withAssets.attachments.map((attachment) => ({ ...attachment }));
 
             const pixelUrl = buildOpenPixelUrl({ campaignId: job.campaignId, recipientId: item.recipientId });
             const unsubscribeUrl = buildUnsubscribeUrl({ campaignId: job.campaignId, recipientId: item.recipientId });
@@ -434,6 +443,7 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
               html: content,
               headers,
               from: campaign.fromEmail || undefined,
+              attachments,
             });
 
             const failureMessage = sendResult.ok

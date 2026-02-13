@@ -13,6 +13,13 @@ export type EmailSendParams = {
   text?: string;
   headers?: Record<string, string>;
   from?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | Uint8Array;
+    contentType?: string;
+    cid?: string;
+    disposition?: 'inline' | 'attachment';
+  }>;
 };
 
 export type EmailSendResult =

@@ -88,6 +88,7 @@ export async function GET(request: Request) {
           secure: smtp.secure,
           from: smtp.from,
         },
+        blobStorageConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()),
         trackingSecretConfigured: Boolean(process.env.EMAIL_TRACKING_SECRET?.trim()),
         oauthTokenEncryptionKeyConfigured: Boolean(getOAuthTokenEncryptionKey()),
         cronSecretConfigured: Boolean(process.env.CRON_SECRET?.trim()),

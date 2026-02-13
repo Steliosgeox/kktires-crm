@@ -34,6 +34,7 @@ Set these in Vercel Project Settings:
 - `NEXTAUTH_URL` (your public URL, e.g. `https://crm.example.com`)
 - `NEXTAUTH_SECRET`
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (required for email sending)
+- `BLOB_READ_WRITE_TOKEN` (required for composer image/file uploads and SMTP attachments)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (optional, only if you use Google OAuth sign-in)
 - `AUTH_ALLOWED_EMAILS` (comma-separated allowlist; non-allowlisted users are denied at sign-in)
 - `EMAIL_TRACKING_SECRET` (signs tracking links/pixels)
@@ -60,6 +61,9 @@ Optional knobs:
 - `EMAIL_JOB_CONCURRENCY` (default `4`)
 - `EMAIL_JOB_YIELD_DELAY_MS` (default `0`)
 - `EMAIL_JOB_LOCK_TIMEOUT_MS` (default `900000` = 15 minutes)
+- `EMAIL_ASSET_CLEANUP_ENABLED` (default `1`, marks orphan composer assets as deleted)
+- `EMAIL_ASSET_CLEANUP_HOURS` (default `24`)
+- `EMAIL_ASSET_CLEANUP_LIMIT` (default `200`)
 
 Optional protection:
 

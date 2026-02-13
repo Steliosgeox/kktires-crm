@@ -22,6 +22,8 @@ import {
   AlignLeft,
   Variable,
   Save,
+  Paperclip,
+  X,
 } from 'lucide-react';
 import { toast } from '@/lib/stores/ui-store';
 import { sanitizeHtml } from '@/lib/html-sanitize';
@@ -48,6 +50,25 @@ interface RecipientFilters {
   categories: string[];
 }
 
+type ImageAlign = 'left' | 'center' | 'right';
+
+interface CampaignAttachment {
+  assetId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  blobUrl: string;
+}
+
+interface InlineImageConfig {
+  assetId: string;
+  embedInline: boolean;
+  widthPx: number | null;
+  align: ImageAlign | null;
+  alt: string | null;
+  sortOrder: number;
+}
+
 interface OutlookEditorProps {
   campaignId?: string | null;
   campaignName: string;
@@ -58,6 +79,10 @@ interface OutlookEditorProps {
   setContent: (content: string) => void;
   recipientFilters: RecipientFilters;
   setRecipientFilters: (filters: RecipientFilters) => void;
+  attachments: CampaignAttachment[];
+  setAttachments: (attachments: CampaignAttachment[]) => void;
+  inlineImages: InlineImageConfig[];
+  setInlineImages: (images: InlineImageConfig[]) => void;
   templates: Template[];
   signatures: Signature[];
   selectedSignature: string | null;
@@ -73,12 +98,12 @@ interface OutlookEditorProps {
 }
 
 const variableTags = [
-  { tag: '{{firstName}}', label: 'Όνομα', icon: 'Ο' },
-  { tag: '{{lastName}}', label: 'Επώνυμο', icon: 'Ε' },
-  { tag: '{{company}}', label: 'Εταιρεία', icon: 'Ε' },
+  { tag: '{{firstName}}', label: 'First Name', icon: 'F' },
+  { tag: '{{lastName}}', label: 'Last Name', icon: 'L' },
+  { tag: '{{company}}', label: 'Company', icon: 'C' },
   { tag: '{{email}}', label: 'Email', icon: '@' },
-  { tag: '{{city}}', label: 'Πόλη', icon: 'Π' },
-  { tag: '{{phone}}', label: 'Τηλέφωνο', icon: 'Τ' },
+  { tag: '{{city}}', label: 'City', icon: 'C' },
+  { tag: '{{phone}}', label: 'Phone', icon: 'P' },
 ];
 
 export function OutlookEditor({
@@ -91,6 +116,10 @@ export function OutlookEditor({
   setContent,
   recipientFilters,
   setRecipientFilters,
+  attachments,
+  setAttachments,
+  inlineImages,
+  setInlineImages,
   templates,
   signatures,
   selectedSignature,
@@ -112,8 +141,14 @@ export function OutlookEditor({
   const [aiLoading, setAiLoading] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
+  const [selectedImageAssetId, setSelectedImageAssetId] = useState<string | null>(null);
+  const [pendingReplaceAssetId, setPendingReplaceAssetId] = useState<string | null>(null);
+  const [customWidth, setCustomWidth] = useState('');
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const lastAppliedRef = useRef<{ key: string; content: string } | null>(null);
 
   const totalRecipients = recipientCount ?? 0;
@@ -140,24 +175,178 @@ export function OutlookEditor({
     if (lastAppliedRef.current.content === next) return;
 
     editor.innerHTML = next;
+    for (const image of inlineImages) {
+      const element = Array.from(editor.querySelectorAll<HTMLImageElement>('img')).find(
+        (img) => img.dataset.emailAssetId === image.assetId
+      );
+      if (!element) continue;
+      element.style.height = 'auto';
+      element.style.maxWidth = '100%';
+      element.style.display = image.align ? 'block' : '';
+      if (image.widthPx) {
+        element.style.width = `${image.widthPx}px`;
+        element.width = image.widthPx;
+      }
+      if (image.align === 'left') {
+        element.style.marginLeft = '0';
+        element.style.marginRight = 'auto';
+      } else if (image.align === 'center') {
+        element.style.marginLeft = 'auto';
+        element.style.marginRight = 'auto';
+      } else if (image.align === 'right') {
+        element.style.marginLeft = 'auto';
+        element.style.marginRight = '0';
+      }
+      if (image.alt != null) {
+        element.alt = image.alt;
+      }
+    }
     lastAppliedRef.current.content = next;
-  }, [campaignId, isNew, content]);
+  }, [campaignId, isNew, content, inlineImages]);
 
   const applyEditorCommand = (command: string, value?: string) => {
     if (!editorRef.current) return;
     editorRef.current.focus();
     document.execCommand(command, false, value);
-    setContent(editorRef.current.innerHTML);
+    updateContentAndInlineRefs(editorRef.current.innerHTML);
+  };
+
+  const selectedImageConfig = selectedImageAssetId
+    ? inlineImages.find((image) => image.assetId === selectedImageAssetId) || null
+    : null;
+
+  useEffect(() => {
+    setCustomWidth(selectedImageConfig?.widthPx ? String(selectedImageConfig.widthPx) : '');
+  }, [selectedImageConfig?.assetId, selectedImageConfig?.widthPx]);
+
+  const updateContentAndInlineRefs = (html: string) => {
+    setContent(html);
+    const ids = new Set<string>();
+    const regex = /<img\b[^>]*data-email-asset-id=(['"])([^'"]+)\1[^>]*>/gi;
+    for (const match of html.matchAll(regex)) {
+      const id = (match[2] || '').trim();
+      if (id) ids.add(id);
+    }
+
+    const nextInline = inlineImages
+      .filter((image) => ids.has(image.assetId))
+      .map((image, index) => ({ ...image, sortOrder: index }));
+
+    if (nextInline.length !== inlineImages.length) {
+      setInlineImages(nextInline);
+      if (selectedImageAssetId && !ids.has(selectedImageAssetId)) {
+        setSelectedImageAssetId(null);
+      }
+    }
+  };
+
+  const uploadAsset = async (
+    file: File,
+    kind: 'image' | 'file',
+    extra?: { width?: number; height?: number }
+  ) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('kind', kind);
+    if (extra?.width) form.append('width', String(extra.width));
+    if (extra?.height) form.append('height', String(extra.height));
+
+    const response = await fetch('/api/email/assets/upload', {
+      method: 'POST',
+      body: form,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message =
+        typeof payload?.error === 'string'
+          ? payload.error
+          : `Upload failed (${response.status} ${response.statusText})`;
+      const code = typeof payload?.code === 'string' ? payload.code : null;
+      const requestId = typeof payload?.requestId === 'string' ? payload.requestId : null;
+      throw new Error([message, code ? `[${code}]` : null, requestId ? `requestId: ${requestId}` : null].filter(Boolean).join(' | '));
+    }
+
+    const asset = payload?.asset as {
+      id: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      blobUrl: string;
+      width?: number | null;
+      height?: number | null;
+    };
+
+    if (!asset?.id || !asset?.blobUrl) {
+      throw new Error('Upload response was invalid');
+    }
+
+    return asset;
+  };
+
+  const optimizeImageFile = async (
+    file: File
+  ): Promise<{ file: File; width: number | null; height: number | null }> => {
+    if (file.type === 'image/gif') return { file, width: null, height: null };
+
+    const bitmap = await createImageBitmap(file);
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const targetWidth = Math.max(1, Math.round(bitmap.width * scale));
+    const targetHeight = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      bitmap.close();
+      return { file, width: bitmap.width, height: bitmap.height };
+    }
+
+    context.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+    bitmap.close();
+
+    const preferPng = file.type === 'image/png' && !/\.jpe?g$/i.test(file.name);
+    const exportType = preferPng ? 'image/png' : 'image/webp';
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, exportType, preferPng ? undefined : 0.82)
+    );
+
+    if (!blob) return { file, width: targetWidth, height: targetHeight };
+
+    const ext = exportType === 'image/png' ? 'png' : 'webp';
+    const base = file.name.replace(/\.[a-zA-Z0-9]+$/, '') || 'image';
+    return {
+      file: new File([blob], `${base}.${ext}`, { type: exportType }),
+      width: targetWidth,
+      height: targetHeight,
+    };
+  };
+
+  const upsertInlineImageConfig = (config: InlineImageConfig) => {
+    const exists = inlineImages.some((item) => item.assetId === config.assetId);
+    if (!exists) {
+      setInlineImages([...inlineImages, { ...config, sortOrder: inlineImages.length }]);
+      return;
+    }
+    setInlineImages(
+      inlineImages.map((item, index) =>
+        item.assetId === config.assetId
+          ? { ...item, ...config, sortOrder: index }
+          : { ...item, sortOrder: index }
+      )
+    );
   };
 
   const handleInsertLink = () => {
-    const raw = window.prompt('Εισάγετε URL');
+    const raw = window.prompt('Enter URL');
     if (!raw) return;
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     applyEditorCommand('createLink', url);
   };
 
   const handleInsertImageClick = () => {
+    setPendingReplaceAssetId(null);
     imageInputRef.current?.click();
   };
 
@@ -168,43 +357,109 @@ export function OutlookEditor({
 
     if (!file.type.startsWith('image/')) {
       toast.error(
-        'Μη έγκυρος τύπος αρχείου',
-        'Επιλέξτε εικόνα (PNG, JPG, WEBP ή GIF).'
-      );
-      return;
-    }
-
-    const maxBytes = 2 * 1024 * 1024; // 2MB
-    if (file.size > maxBytes) {
-      toast.warning(
-        'Η εικόνα είναι πολύ μεγάλη',
-        'Χρησιμοποιήστε εικόνα έως 2MB για σταθερή αποθήκευση campaign.'
+        'Invalid file type',
+        'Please select an image (PNG, JPG, WEBP, GIF).'
       );
       return;
     }
 
     try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(new Error('Failed to read image file'));
-        reader.readAsDataURL(file);
+      setUploadingImages(true);
+      const optimized = await optimizeImageFile(file);
+      const asset = await uploadAsset(optimized.file, 'image', {
+        width: optimized.width ?? undefined,
+        height: optimized.height ?? undefined,
       });
 
       if (!editorRef.current) return;
       editorRef.current.focus();
+
+      if (pendingReplaceAssetId) {
+        const existing = Array.from(editorRef.current.querySelectorAll<HTMLImageElement>('img')).find(
+          (img) => img.dataset.emailAssetId === pendingReplaceAssetId
+        );
+        if (existing) {
+          const currentConfig = inlineImages.find((item) => item.assetId === pendingReplaceAssetId);
+          existing.src = asset.blobUrl;
+          existing.dataset.emailAssetId = asset.id;
+          const withoutOld = inlineImages
+            .filter((item) => item.assetId !== pendingReplaceAssetId)
+            .map((item, index) => ({ ...item, sortOrder: index }));
+          const replacement: InlineImageConfig = {
+            assetId: asset.id,
+            embedInline: currentConfig?.embedInline ?? false,
+            widthPx: currentConfig?.widthPx ?? null,
+            align: currentConfig?.align ?? null,
+            alt: currentConfig?.alt ?? (existing.alt || null),
+            sortOrder: withoutOld.length,
+          };
+          setInlineImages([...withoutOld, replacement]);
+
+          setSelectedImageAssetId(asset.id);
+          updateContentAndInlineRefs(editorRef.current.innerHTML);
+          return;
+        }
+      }
+
       document.execCommand(
         'insertHTML',
         false,
-        `<img src="${dataUrl}" alt="" style="max-width:100%;height:auto;" />`
+        `<img src="${asset.blobUrl}" data-email-asset-id="${asset.id}" alt="" style="max-width:100%;height:auto;" />`
       );
-      setContent(editorRef.current.innerHTML);
+      upsertInlineImageConfig({
+        assetId: asset.id,
+        embedInline: false,
+        widthPx: null,
+        align: null,
+        alt: null,
+        sortOrder: inlineImages.length,
+      });
+      setSelectedImageAssetId(asset.id);
+      updateContentAndInlineRefs(editorRef.current.innerHTML);
     } catch (error) {
       console.error('Image insert error:', error);
       toast.error(
-        'Αποτυχία εισαγωγής εικόνας',
-        'Η εικόνα δεν μπόρεσε να προστεθεί στο email.'
+        'Image insert failed',
+        error instanceof Error ? error.message : 'Could not add image to email body.'
       );
+    } finally {
+      setUploadingImages(false);
+      setPendingReplaceAssetId(null);
+    }
+  };
+
+  const handleInsertAttachmentClick = () => {
+    attachmentInputRef.current?.click();
+  };
+
+  const handleAttachmentSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    event.target.value = '';
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploadingAttachments(true);
+      const next = [...attachments];
+      for (const file of Array.from(files)) {
+        const asset = await uploadAsset(file, 'file');
+        if (!next.some((item) => item.assetId === asset.id)) {
+          next.push({
+            assetId: asset.id,
+            fileName: asset.fileName,
+            mimeType: asset.mimeType,
+            sizeBytes: Number(asset.sizeBytes || 0),
+            blobUrl: asset.blobUrl,
+          });
+        }
+      }
+      setAttachments(next);
+    } catch (error) {
+      toast.error(
+        'Attachment upload failed',
+        error instanceof Error ? error.message : 'Could not attach file.'
+      );
+    } finally {
+      setUploadingAttachments(false);
     }
   };
 
@@ -213,7 +468,7 @@ export function OutlookEditor({
     setSubject(template.subject);
     if (template.content) {
       const sanitized = sanitizeHtml(template.content);
-      setContent(sanitized);
+      updateContentAndInlineRefs(sanitized);
       if (editorRef.current) {
         editorRef.current.innerHTML = sanitized;
       }
@@ -229,8 +484,7 @@ export function OutlookEditor({
         const textNode = document.createTextNode(tag);
         range.insertNode(textNode);
         range.collapse(false);
-        // Update content state
-        setContent(editorRef.current.innerHTML);
+        updateContentAndInlineRefs(editorRef.current.innerHTML);
       }
     }
     setShowVariables(false);
@@ -245,13 +499,13 @@ export function OutlookEditor({
         const response = await fetch('/api/ai/email-expand', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ briefNote: currentContent, customer: { firstName: 'Πελάτη' } }),
+          body: JSON.stringify({ briefNote: currentContent, customer: { firstName: 'Customer' } }),
         });
         if (response.ok) {
           const data = await response.json();
           if (data.generatedText) {
             const sanitized = sanitizeHtml(String(data.generatedText));
-            setContent(sanitized);
+            updateContentAndInlineRefs(sanitized);
             if (editorRef.current) {
               editorRef.current.innerHTML = sanitized;
             }
@@ -267,7 +521,7 @@ export function OutlookEditor({
           const data = await response.json();
           if (data.improved) {
             const sanitized = sanitizeHtml(String(data.improved));
-            setContent(sanitized);
+            updateContentAndInlineRefs(sanitized);
             if (editorRef.current) {
               editorRef.current.innerHTML = sanitized;
             }
@@ -293,6 +547,47 @@ export function OutlookEditor({
     }
   };
 
+  useEffect(() => {
+    if (!selectedImageAssetId || !editorRef.current) return;
+    const config = inlineImages.find((image) => image.assetId === selectedImageAssetId);
+    if (!config) return;
+
+    const element = Array.from(editorRef.current.querySelectorAll<HTMLImageElement>('img')).find(
+      (img) => img.dataset.emailAssetId === selectedImageAssetId
+    );
+    if (!element) return;
+
+    element.style.height = 'auto';
+    element.style.maxWidth = '100%';
+    element.style.display = config.align ? 'block' : '';
+
+    if (config.widthPx) {
+      element.style.width = `${config.widthPx}px`;
+      element.width = config.widthPx;
+    } else {
+      element.style.removeProperty('width');
+      element.removeAttribute('width');
+    }
+
+    if (config.align === 'left') {
+      element.style.marginLeft = '0';
+      element.style.marginRight = 'auto';
+    } else if (config.align === 'center') {
+      element.style.marginLeft = 'auto';
+      element.style.marginRight = 'auto';
+    } else if (config.align === 'right') {
+      element.style.marginLeft = 'auto';
+      element.style.marginRight = '0';
+    } else {
+      element.style.marginLeft = '';
+      element.style.marginRight = '';
+    }
+
+    element.alt = config.alt || '';
+    updateContentAndInlineRefs(editorRef.current.innerHTML);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedImageConfig?.widthPx, selectedImageConfig?.align, selectedImageConfig?.alt]);
+
   return (
     <div
       className="h-full flex flex-col"
@@ -311,7 +606,7 @@ export function OutlookEditor({
             className="text-lg font-semibold"
             style={{ color: 'var(--outlook-text-primary)' }}
           >
-            {isNew ? 'Νέο Campaign' : 'Επεξεργασία'}
+            {isNew ? 'New Campaign' : 'Edit Campaign'}
           </h2>
           {!isNew && campaignId && (
             <span
@@ -335,7 +630,7 @@ export function OutlookEditor({
               background: 'var(--outlook-bg-hover)',
             }}
           >
-            Ακύρωση
+            Cancel
           </button>
           <button
             onClick={() => onSave(false)}
@@ -347,7 +642,7 @@ export function OutlookEditor({
             }}
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+            {saving ? 'Saving...' : 'Save'}
           </button>
           <button
             onClick={() => setShowSchedule(!showSchedule)}
@@ -358,7 +653,7 @@ export function OutlookEditor({
             }}
           >
             <Clock className="w-4 h-4" />
-            Προγραμματισμός
+            Schedule
           </button>
           <button
             onClick={() => onSave(true)}
@@ -371,7 +666,7 @@ export function OutlookEditor({
             }}
           >
             <Send className="w-4 h-4" />
-            {sending ? 'Αποστολή...' : 'Αποστολή Τώρα'}
+            {sending ? 'Sending...' : 'Send Now'}
           </button>
         </div>
       </div>
@@ -391,7 +686,7 @@ export function OutlookEditor({
                 className="block text-xs font-medium mb-1"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Ημερομηνία
+                Date
               </label>
               <input
                 type="date"
@@ -410,7 +705,7 @@ export function OutlookEditor({
                 className="block text-xs font-medium mb-1"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Ώρα
+                Time
               </label>
               <input
                 type="time"
@@ -427,13 +722,13 @@ export function OutlookEditor({
             <button
               onClick={() => {
                 if (!scheduleDate || !scheduleTime) {
-                  toast.warning('Χρειάζεται ημερομηνία/ώρα', 'Επιλέξτε ημερομηνία και ώρα');
+                  toast.warning('Date/time required', 'Select both date and time.');
                   return;
                 }
 
                 const dt = new Date(`${scheduleDate}T${scheduleTime}:00`);
                 if (isNaN(dt.getTime())) {
-                  toast.error('Μη έγκυρη ημερομηνία/ώρα', 'Ελέγξτε την ημερομηνία και την ώρα και δοκιμάστε ξανά.');
+                  toast.error('Invalid date/time', 'Please verify date and time and try again.');
                   return;
                 }
 
@@ -448,7 +743,7 @@ export function OutlookEditor({
                 opacity: (saving || sending || !hasRecipients) ? 0.6 : 1,
               }}
             >
-              Προγραμματισμός
+              Confirm Schedule
             </button>
           </div>
         </div>
@@ -474,13 +769,13 @@ export function OutlookEditor({
                 className="text-sm font-medium w-20"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Όνομα:
+                Name:
               </span>
               <input
                 type="text"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
-                placeholder="Όνομα campaign..."
+                placeholder="Campaign name..."
                 className="flex-1 text-sm bg-transparent border-none outline-none"
                 style={{ color: 'var(--outlook-text-primary)' }}
               />
@@ -497,7 +792,7 @@ export function OutlookEditor({
                 className="text-sm font-medium w-20"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Προς:
+                To:
               </span>
               <div className="flex-1 flex items-center gap-2 flex-wrap">
                 {recipientFilters.cities.map((city) => (
@@ -509,7 +804,7 @@ export function OutlookEditor({
                       color: 'var(--outlook-accent)',
                     }}
                   >
-                    📍 {city}
+                    City: {city}
                     <button
                       onClick={() => setRecipientFilters({
                         ...recipientFilters,
@@ -530,7 +825,7 @@ export function OutlookEditor({
                       color: 'var(--outlook-success)',
                     }}
                   >
-                    🏷️ {tag}
+                    Tag: {tag}
                     <button
                       onClick={() => setRecipientFilters({
                         ...recipientFilters,
@@ -551,7 +846,7 @@ export function OutlookEditor({
                       color: 'var(--outlook-warning)',
                     }}
                   >
-                    👥 {segment}
+                    Segment: {segment}
                     <button
                       onClick={() => setRecipientFilters({
                         ...recipientFilters,
@@ -572,7 +867,7 @@ export function OutlookEditor({
                   }}
                 >
                   <Plus className="w-3 h-3" />
-                  Προσθήκη παραληπτών
+                  Add Recipients
                 </button>
               </div>
               {totalRecipients > 0 && (
@@ -583,7 +878,7 @@ export function OutlookEditor({
                     color: 'white',
                   }}
                 >
-                  {totalRecipients} παραλήπτες
+                  {totalRecipients} recipients
                 </span>
               )}
             </div>
@@ -599,13 +894,13 @@ export function OutlookEditor({
                 className="text-sm font-medium w-20"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Θέμα:
+                Subject:
               </span>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="Θέμα email..."
+                placeholder="Email subject..."
                 className="flex-1 text-sm bg-transparent border-none outline-none"
                 style={{ color: 'var(--outlook-text-primary)' }}
               />
@@ -620,7 +915,7 @@ export function OutlookEditor({
                 }}
               >
                 <Sparkles className="w-3 h-3" />
-                AI Θέμα
+                AI Subject
               </button>
             </div>
           </div>
@@ -702,8 +997,18 @@ export function OutlookEditor({
                 onClick={handleInsertImageClick}
                 className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
                 title="Insert image"
+                disabled={uploadingImages}
               >
                 <ImageIcon className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertAttachmentClick}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Add attachment"
+                disabled={uploadingAttachments}
+              >
+                <Paperclip className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
               <input
                 ref={imageInputRef}
@@ -711,6 +1016,13 @@ export function OutlookEditor({
                 accept="image/png,image/jpeg,image/webp,image/gif"
                 className="hidden"
                 onChange={handleImageSelected}
+              />
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleAttachmentSelected}
               />
             </div>
 
@@ -738,7 +1050,7 @@ export function OutlookEditor({
                 >
                   {templates.length === 0 ? (
                     <div className="p-3 text-sm" style={{ color: 'var(--outlook-text-tertiary)' }}>
-                      Δεν υπάρχουν templates
+                      No templates
                     </div>
                   ) : (
                     templates.map((template) => (
@@ -770,7 +1082,7 @@ export function OutlookEditor({
                 }}
               >
                 <Variable className="w-3 h-3" />
-                Μεταβλητές
+                Variables
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showVariables && (
@@ -816,7 +1128,7 @@ export function OutlookEditor({
               }}
             >
               <Sparkles className={`w-3 h-3 ${aiLoading ? 'animate-spin' : ''}`} />
-              {aiLoading ? 'AI...' : 'AI Βελτίωση'}
+              {aiLoading ? 'AI...' : 'AI Improve'}
             </button>
 
             {/* Preview Toggle */}
@@ -829,9 +1141,197 @@ export function OutlookEditor({
               }}
             >
               <Eye className="w-3 h-3" />
-              Προεπισκόπηση
+              Preview
             </button>
           </div>
+
+          {selectedImageConfig && (
+            <div
+              className="px-4 py-2 border-b flex flex-wrap items-center gap-2"
+              style={{ borderColor: 'var(--outlook-border)' }}
+            >
+              <span className="text-xs" style={{ color: 'var(--outlook-text-secondary)' }}>
+                Image:
+              </span>
+              {[25, 50, 75, 100].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => {
+                    const editorWidth = Math.max(320, editorRef.current?.clientWidth || 800);
+                    const width = Math.round((editorWidth * pct) / 100);
+                    setInlineImages(
+                      inlineImages.map((item, index) =>
+                        item.assetId === selectedImageConfig.assetId
+                          ? { ...item, widthPx: width, sortOrder: index }
+                          : { ...item, sortOrder: index }
+                      )
+                    );
+                  }}
+                  className="px-2 py-1 text-xs rounded-md"
+                  style={{ background: 'var(--outlook-bg-hover)', color: 'var(--outlook-text-primary)' }}
+                >
+                  {pct}%
+                </button>
+              ))}
+              <input
+                type="number"
+                min={32}
+                max={2400}
+                value={customWidth}
+                onChange={(e) => setCustomWidth(e.target.value)}
+                onBlur={() => {
+                  if (!selectedImageConfig) return;
+                  const parsed = Number.parseInt(customWidth, 10);
+                  const width = Number.isFinite(parsed) ? Math.max(32, Math.min(2400, parsed)) : null;
+                  setInlineImages(
+                    inlineImages.map((item, index) =>
+                      item.assetId === selectedImageConfig.assetId
+                        ? { ...item, widthPx: width, sortOrder: index }
+                        : { ...item, sortOrder: index }
+                    )
+                  );
+                }}
+                placeholder="px"
+                className="w-20 px-2 py-1 text-xs rounded-md"
+                style={{ background: 'var(--outlook-bg-surface)', border: '1px solid var(--outlook-border)' }}
+              />
+              {(['left', 'center', 'right'] as const).map((align) => (
+                <button
+                  key={align}
+                  type="button"
+                  onClick={() => {
+                    if (!selectedImageConfig) return;
+                    setInlineImages(
+                      inlineImages.map((item, index) =>
+                        item.assetId === selectedImageConfig.assetId
+                          ? { ...item, align, sortOrder: index }
+                          : { ...item, sortOrder: index }
+                      )
+                    );
+                  }}
+                  className="px-2 py-1 text-xs rounded-md"
+                  style={{
+                    background:
+                      selectedImageConfig.align === align
+                        ? 'var(--outlook-accent-light)'
+                        : 'var(--outlook-bg-hover)',
+                    color:
+                      selectedImageConfig.align === align
+                        ? 'var(--outlook-accent)'
+                        : 'var(--outlook-text-primary)',
+                  }}
+                >
+                  {align}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={selectedImageConfig.alt || ''}
+                onChange={(e) => {
+                  if (!selectedImageConfig) return;
+                  const alt = e.target.value.trim();
+                  setInlineImages(
+                    inlineImages.map((item, index) =>
+                      item.assetId === selectedImageConfig.assetId
+                        ? { ...item, alt: alt || null, sortOrder: index }
+                        : { ...item, sortOrder: index }
+                    )
+                  );
+                }}
+                placeholder="Alt text"
+                className="px-2 py-1 text-xs rounded-md"
+                style={{ background: 'var(--outlook-bg-surface)', border: '1px solid var(--outlook-border)' }}
+              />
+              <label className="flex items-center gap-1 text-xs" style={{ color: 'var(--outlook-text-secondary)' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedImageConfig.embedInline}
+                  onChange={(e) => {
+                    if (!selectedImageConfig) return;
+                    const checked = e.target.checked;
+                    setInlineImages(
+                      inlineImages.map((item, index) =>
+                        item.assetId === selectedImageConfig.assetId
+                          ? { ...item, embedInline: checked, sortOrder: index }
+                          : { ...item, sortOrder: index }
+                      )
+                    );
+                  }}
+                />
+                Embed inline (CID)
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedImageAssetId) return;
+                  setPendingReplaceAssetId(selectedImageAssetId);
+                  imageInputRef.current?.click();
+                }}
+                className="px-2 py-1 text-xs rounded-md"
+                style={{ background: 'var(--outlook-bg-hover)', color: 'var(--outlook-text-primary)' }}
+              >
+                Replace
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedImageAssetId || !editorRef.current) return;
+                  const editor = editorRef.current;
+                  const element = Array.from(editor.querySelectorAll<HTMLImageElement>('img')).find(
+                    (img) => img.dataset.emailAssetId === selectedImageAssetId
+                  );
+                  element?.remove();
+                  setInlineImages(
+                    inlineImages
+                      .filter((item) => item.assetId !== selectedImageAssetId)
+                      .map((item, index) => ({ ...item, sortOrder: index }))
+                  );
+                  setSelectedImageAssetId(null);
+                  updateContentAndInlineRefs(editor.innerHTML);
+                }}
+                className="px-2 py-1 text-xs rounded-md"
+                style={{ background: 'var(--outlook-error-bg)', color: 'var(--outlook-error)' }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+
+          {attachments.length > 0 && (
+            <div
+              className="px-4 py-2 border-b flex flex-wrap gap-2"
+              style={{ borderColor: 'var(--outlook-border)' }}
+            >
+              {attachments.map((attachment) => (
+                <span
+                  key={attachment.assetId}
+                  className="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs"
+                  style={{ background: 'var(--outlook-bg-hover)', color: 'var(--outlook-text-primary)' }}
+                >
+                  <Paperclip className="w-3 h-3" />
+                  {attachment.fileName}
+                  <span style={{ color: 'var(--outlook-text-tertiary)' }}>
+                    {attachment.sizeBytes < 1024
+                      ? `${attachment.sizeBytes} B`
+                      : attachment.sizeBytes < 1024 * 1024
+                        ? `${(attachment.sizeBytes / 1024).toFixed(1)} KB`
+                        : `${(attachment.sizeBytes / (1024 * 1024)).toFixed(1)} MB`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAttachments(attachments.filter((item) => item.assetId !== attachment.assetId))
+                    }
+                    className="hover:opacity-70"
+                    aria-label={`Remove ${attachment.fileName}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Preview Mode Selector */}
           {showPreview && (
@@ -843,7 +1343,7 @@ export function OutlookEditor({
               }}
             >
               <span className="text-xs" style={{ color: 'var(--outlook-text-tertiary)' }}>
-                Προβολή:
+                View:
               </span>
               <button
                 onClick={() => setPreviewMode('desktop')}
@@ -890,7 +1390,7 @@ export function OutlookEditor({
                 <div
                   dangerouslySetInnerHTML={{
                     __html: sanitizeHtml(
-                      content || '<p style="color: #999;">Δεν υπάρχει περιεχόμενο...</p>'
+                      content || '<p style="color: #999;">No content...</p>'
                     ),
                   }}
                 />
@@ -906,8 +1406,15 @@ export function OutlookEditor({
                   direction: 'ltr',
                   textAlign: 'left',
                 }}
-                onInput={(e) => setContent(e.currentTarget.innerHTML)}
-                data-placeholder="Γράψτε το μήνυμά σας εδώ..."
+                onInput={(e) => updateContentAndInlineRefs(e.currentTarget.innerHTML)}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement | null;
+                  if (!target) return;
+                  const img = target.closest('img');
+                  const assetId = img instanceof HTMLImageElement ? img.dataset.emailAssetId || null : null;
+                  setSelectedImageAssetId(assetId);
+                }}
+                data-placeholder="Write your message here..."
                 suppressContentEditableWarning
               />
             )}
@@ -923,7 +1430,7 @@ export function OutlookEditor({
                 className="text-xs"
                 style={{ color: 'var(--outlook-text-tertiary)' }}
               >
-                Υπογραφή:
+                Signature:
               </span>
               <select
                 value={selectedSignature || ''}
@@ -935,10 +1442,10 @@ export function OutlookEditor({
                   color: 'var(--outlook-text-primary)',
                 }}
               >
-                <option value="">Χωρίς υπογραφή</option>
+                <option value="">No signature</option>
                 {signatures.map((sig) => (
                   <option key={sig.id} value={sig.id}>
-                    {sig.name} {sig.isDefault ? '(Προεπιλογή)' : ''}
+                    {sig.name} {sig.isDefault ? '(Default)' : ''}
                   </option>
                 ))}
               </select>
@@ -949,3 +1456,4 @@ export function OutlookEditor({
     </div>
   );
 }
+

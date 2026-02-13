@@ -23,6 +23,10 @@ interface Campaign {
   sentCount: number;
   openCount: number;
   clickCount: number;
+  assets?: {
+    attachments: CampaignAttachment[];
+    inlineImages: InlineImageConfig[];
+  };
 }
 
 interface Template {
@@ -46,6 +50,25 @@ interface RecipientFilters {
   tags: string[];
   segments: string[];
   categories: string[];
+}
+
+interface CampaignAttachment {
+  assetId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  blobUrl: string;
+}
+
+type ImageAlign = 'left' | 'center' | 'right';
+
+interface InlineImageConfig {
+  assetId: string;
+  embedInline: boolean;
+  widthPx: number | null;
+  align: ImageAlign | null;
+  alt: string | null;
+  sortOrder: number;
 }
 
 type ApiFailure = {
@@ -85,6 +108,8 @@ export default function EmailPage() {
     segments: [],
     categories: [],
   });
+  const [attachments, setAttachments] = useState<CampaignAttachment[]>([]);
+  const [inlineImages, setInlineImages] = useState<InlineImageConfig[]>([]);
   const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
@@ -276,6 +301,8 @@ export default function EmailPage() {
     setSubject('');
     setContent('');
     setRecipientFilters({ cities: [], tags: [], segments: [], categories: [] });
+    setAttachments([]);
+    setInlineImages([]);
     setSelectedSignature(null);
   };
 
@@ -305,6 +332,13 @@ export default function EmailPage() {
         setSubject(campaign.subject);
         setContent(campaign.content || '');
         setRecipientFilters(campaign.recipientFilters || { cities: [], tags: [], segments: [], categories: [] });
+        setAttachments(campaign.assets?.attachments || []);
+        setInlineImages(
+          (campaign.assets?.inlineImages || []).map((image: InlineImageConfig, index: number) => ({
+            ...image,
+            sortOrder: Number.isFinite(image.sortOrder) ? image.sortOrder : index,
+          }))
+        );
         setSelectedSignature(campaign.signatureId || null);
       })
       .catch((err) => {
@@ -322,6 +356,8 @@ export default function EmailPage() {
       setCampaignName(template.name);
       setSubject(template.subject);
       setContent(template.content || '');
+      setAttachments([]);
+      setInlineImages([]);
     }
   };
 
@@ -341,6 +377,17 @@ export default function EmailPage() {
         status: 'draft',
         recipientFilters,
         signatureId: selectedSignature,
+        assets: {
+          attachments: attachments.map((item) => item.assetId),
+          inlineImages: inlineImages.map((item, index) => ({
+            assetId: item.assetId,
+            embedInline: item.embedInline,
+            widthPx: item.widthPx,
+            align: item.align,
+            alt: item.alt,
+            sortOrder: index,
+          })),
+        },
       };
 
       const url = isNew ? '/api/campaigns' : `/api/campaigns/${selectedCampaignId}`;
@@ -406,6 +453,17 @@ export default function EmailPage() {
         scheduledAt: runAtIso,
         recipientFilters,
         signatureId: selectedSignature,
+        assets: {
+          attachments: attachments.map((item) => item.assetId),
+          inlineImages: inlineImages.map((item, index) => ({
+            assetId: item.assetId,
+            embedInline: item.embedInline,
+            widthPx: item.widthPx,
+            align: item.align,
+            alt: item.alt,
+            sortOrder: index,
+          })),
+        },
       };
 
       const url = isNew ? '/api/campaigns' : `/api/campaigns/${selectedCampaignId}`;
@@ -573,6 +631,10 @@ export default function EmailPage() {
             setContent={setContent}
             recipientFilters={recipientFilters}
             setRecipientFilters={setRecipientFilters}
+            attachments={attachments}
+            setAttachments={setAttachments}
+            inlineImages={inlineImages}
+            setInlineImages={setInlineImages}
             templates={templates}
             signatures={signatures}
             selectedSignature={selectedSignature}
