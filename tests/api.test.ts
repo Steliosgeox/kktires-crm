@@ -712,7 +712,7 @@ describe('API routes (DB-backed)', () => {
     }
   });
 
-  it('cron routes require strict bearer authorization in production', async () => {
+  it('cron routes enforce CRON_SECRET and support external scheduler auth patterns', async () => {
     const cronEmailRoute = await import('../src/app/api/cron/email-jobs/route');
     const cronGeocodeRoute = await import('../src/app/api/cron/geocode-customers/route');
 
@@ -728,13 +728,25 @@ describe('API routes (DB-backed)', () => {
       );
       expect(emailUnauthorized.status).toBe(401);
 
-      const emailAuthorized = await cronEmailRoute.GET(
+      const emailAuthorizedBearer = await cronEmailRoute.GET(
         new Request('http://localhost/api/cron/email-jobs', {
           headers: { authorization: 'Bearer cron_secret' },
         })
       );
-      expect(emailAuthorized.status).toBe(200);
+      expect(emailAuthorizedBearer.status).toBe(200);
       expect(mockProcessDueEmailJobs).toHaveBeenCalled();
+
+      const emailAuthorizedHeader = await cronEmailRoute.GET(
+        new Request('http://localhost/api/cron/email-jobs', {
+          headers: { 'x-cron-secret': 'cron_secret' },
+        })
+      );
+      expect(emailAuthorizedHeader.status).toBe(200);
+
+      const emailAuthorizedQuery = await cronEmailRoute.GET(
+        new Request('http://localhost/api/cron/email-jobs?cron_secret=cron_secret')
+      );
+      expect(emailAuthorizedQuery.status).toBe(200);
 
       const geocodeUnauthorized = await cronGeocodeRoute.GET(
         new Request('http://localhost/api/cron/geocode-customers')

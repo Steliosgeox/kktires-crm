@@ -5,16 +5,10 @@ import { db } from '@/lib/db';
 import { customers } from '@/lib/db/schema';
 import { buildAddressString, geocodeAddress } from '@/server/maps/geocode';
 import { clampInt, createRequestId, jsonError } from '@/server/api/http';
+import { isCronAuthorized } from '@/server/cron/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET?.trim();
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (!secret) return !isProduction;
-  return request.headers.get('authorization') === `Bearer ${secret}`;
-}
 
 function hasGeocodeKey(): boolean {
   const key =
@@ -25,7 +19,7 @@ function hasGeocodeKey(): boolean {
 
 export async function GET(request: Request) {
   const requestId = createRequestId();
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
   }
   if (!hasGeocodeKey()) {

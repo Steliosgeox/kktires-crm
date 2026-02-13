@@ -41,13 +41,16 @@ Set these in Vercel Project Settings:
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (only if you use the Map page)
 - `GOOGLE_GEOCODING_API_KEY` (recommended, server-side; used to backfill customer coordinates)
 
-### Email Job Processing (Vercel Cron)
+### Email Job Processing (External Scheduler)
 
 Campaign sends are enqueued via authenticated endpoints and processed by a cron route:
 
-- `vercel.json` config schedules `GET /api/cron/email-jobs` every minute.
+- Schedule `GET /api/cron/email-jobs` every minute from an external scheduler (for example, cron-job.org).
 - The processor sends emails in chunks to stay within serverless time limits.
-- In production, set `CRON_SECRET` and make sure cron requests include `Authorization: Bearer <CRON_SECRET>`.
+- In production, set `CRON_SECRET` and include it in one of these ways:
+- `Authorization: Bearer <CRON_SECRET>` header (preferred).
+- `x-cron-secret: <CRON_SECRET>` header.
+- Query string fallback: `?cron_secret=<CRON_SECRET>`.
 
 Optional knobs:
 
@@ -60,12 +63,29 @@ Optional knobs:
 
 Optional protection:
 
-- `CRON_SECRET`: required in production for cron endpoints. Use `Authorization: Bearer <CRON_SECRET>`.
+- `CRON_SECRET`: required in production for cron endpoints.
 
-### Customer Geocoding Backfill (Vercel Cron)
+### Customer Geocoding Backfill (External Scheduler)
 
-- `vercel.json` also schedules `GET /api/cron/geocode-customers` hourly.
+- Schedule `GET /api/cron/geocode-customers` hourly from the same external scheduler.
 - This fills in missing `customers.latitude/longitude` via Google Geocoding (cached in `geocode_cache`).
+
+### cron-job.org Setup (Exact)
+
+Create two jobs:
+
+1. Email queue processor (every minute):
+- URL: `https://<your-domain>/api/cron/email-jobs?cron_secret=<CRON_SECRET>`
+- Method: `GET`
+- Schedule: `* * * * *`
+
+2. Geocode backfill (hourly):
+- URL: `https://<your-domain>/api/cron/geocode-customers?cron_secret=<CRON_SECRET>`
+- Method: `GET`
+- Schedule: `0 * * * *`
+
+If your cron-job.org tier supports custom headers, use header auth instead of query params:
+- `Authorization: Bearer <CRON_SECRET>`
 
 ## Notes
 

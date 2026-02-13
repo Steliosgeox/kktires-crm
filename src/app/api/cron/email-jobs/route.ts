@@ -2,16 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { processDueEmailJobs } from '@/server/email/process-jobs';
 import { createRequestId, jsonError } from '@/server/api/http';
+import { isCronAuthorized } from '@/server/cron/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-function isAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET?.trim();
-  const isProduction = process.env.NODE_ENV === 'production';
-  if (!secret) return !isProduction;
-  return request.headers.get('authorization') === `Bearer ${secret}`;
-}
 
 function getWorkerId(): string {
   const region = process.env.VERCEL_REGION || 'local';
@@ -21,7 +15,7 @@ function getWorkerId(): string {
 
 export async function GET(request: Request) {
   const requestId = createRequestId();
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request)) {
     return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
   }
 
