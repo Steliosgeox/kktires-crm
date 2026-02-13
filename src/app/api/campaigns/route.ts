@@ -63,9 +63,19 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
   return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
 }
 
+function isMissingColumnErrorAny(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /no such column/i.test(message);
+}
+
 function isForeignKeyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
   return /foreign key/i.test(message);
+}
+
+function isMissingTableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /no such table/i.test(message);
 }
 
 function makeOrgSlug(orgId: string): string {
@@ -258,8 +268,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const campaignId = `camp_${nanoid()}`;
+    const now = new Date();
+
     const campaignValues: Record<string, unknown> = {
-      id: `camp_${nanoid()}`,
+      id: campaignId,
       orgId,
       name: body.name,
       subject: body.subject || body.name,
@@ -269,23 +282,58 @@ export async function POST(request: NextRequest) {
       totalRecipients,
       recipientFilters,
       signatureId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     };
 
     const insertCampaign = async (values: Record<string, unknown>) =>
       db.insert(emailCampaigns).values(values as any).returning();
 
-    const MAX_INSERT_RETRIES = 3;
+    const selectCampaignBack = async (cId: string) => {
+      try {
+        const row = await db.query.emailCampaigns.findFirst({
+          where: (c, { eq: whereEq }) => whereEq(c.id, cId),
+        });
+        return row ? [row] : [{ id: cId }];
+      } catch {
+        return [{ id: cId }];
+      }
+    };
+
+    const MAX_INSERT_RETRIES = 4;
     let newCampaign;
     let lastInsertError: unknown;
     for (let attempt = 0; attempt < MAX_INSERT_RETRIES; attempt++) {
       try {
-        newCampaign = await insertCampaign(campaignValues);
+        if (attempt < 3) {
+          newCampaign = await insertCampaign(campaignValues);
+        } else {
+          // Final fallback: insert without .returning(), then select back.
+          await db.insert(emailCampaigns).values(campaignValues as any);
+          newCampaign = await selectCampaignBack(campaignId);
+        }
         break;
       } catch (error) {
         lastInsertError = error;
         let retryable = false;
+        const errMsg = error instanceof Error ? error.message : String(error);
+
+        console.error(
+          `[campaigns:post] requestId=${requestId} insert attempt=${attempt} failed:`,
+          errMsg
+        );
+
+        // If the row was already inserted (PK collision from a prior attempt whose
+        // .returning() failed), just select it back.
+        if (/unique|primary key|constraint/i.test(errMsg) && /campaign/i.test(errMsg)) {
+          newCampaign = await selectCampaignBack(campaignId);
+          break;
+        }
+        // Also handle SQLITE_CONSTRAINT for primary key
+        if (/UNIQUE constraint failed/i.test(errMsg) || /SQLITE_CONSTRAINT/i.test(errMsg)) {
+          newCampaign = await selectCampaignBack(campaignId);
+          break;
+        }
 
         if (isMissingColumnError(error, 'recipient_filters')) {
           delete campaignValues.recipientFilters;
@@ -296,8 +344,22 @@ export async function POST(request: NextRequest) {
           delete campaignValues.signatureId;
           retryable = true;
         }
+        if (isMissingColumnError(error, 'total_recipients')) {
+          delete campaignValues.totalRecipients;
+          retryable = true;
+        }
+        // Catch any other missing column by stripping all optional fields and retrying.
+        if (!retryable && isMissingColumnErrorAny(error)) {
+          delete campaignValues.recipientFilters;
+          delete campaignValues.totalRecipients;
+          delete campaignValues.signatureId;
+          delete campaignValues.scheduledAt;
+          delete campaignValues.templateId;
+          retryable = true;
+        }
         if (isForeignKeyError(error)) {
           campaignValues.signatureId = null;
+          delete campaignValues.templateId;
           try {
             await ensureOrganizationExists(orgId);
           } catch (ensureError) {
@@ -308,19 +370,20 @@ export async function POST(request: NextRequest) {
           }
           retryable = true;
         }
+        // If the .returning() clause fails for unknown reasons,
+        // the final attempt uses insert-without-returning + select-back.
+        if (!retryable && attempt < MAX_INSERT_RETRIES - 1) {
+          retryable = true;
+        }
 
         if (!retryable) {
           throw error;
         }
-        // Loop continues with fixed values for next attempt.
       }
     }
-    if (!newCampaign) {
-      // All retries exhausted – throw the last error to surface it properly.
+    if (!newCampaign || newCampaign.length === 0) {
       throw lastInsertError;
     }
-
-    const campaignId = newCampaign[0].id as string;
     if (normalizedAssets.attachments.length > 0 || normalizedAssets.inlineImages.length > 0) {
       try {
         await syncCampaignAssets({
@@ -336,8 +399,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ...newCampaign[0], requestId, assets: normalizedAssets }, { status: 201 });
   } catch (error) {
+    // Surface the actual error detail so production failures are diagnosable.
+    const detail = error instanceof Error ? error.message : String(error ?? 'unknown');
+    console.error(`[campaigns:post] requestId=${requestId} FINAL ERROR:`, error);
     return handleApiError('campaigns:post', error, requestId, {
-      message: 'Failed to create campaign',
+      message: `Failed to create campaign | ${detail}`,
     });
   }
 }

@@ -24,6 +24,11 @@ function isMissingColumnError(error: unknown, columnName: string): boolean {
   return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
 }
 
+function isMissingColumnErrorAny(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /no such column/i.test(message);
+}
+
 function isForeignKeyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
   return /foreign key/i.test(message);
@@ -172,16 +177,38 @@ export async function PUT(
         .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
         .returning();
 
-    const MAX_UPDATE_RETRIES = 3;
+    const runUpdateMinimal = async (values: Record<string, unknown>) => {
+      await db
+        .update(emailCampaigns)
+        .set(values as any)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)));
+      try {
+        const row = await db.query.emailCampaigns.findFirst({
+          where: (c, { eq: whereEq, and: whereAnd }) => whereAnd(whereEq(c.id, id), whereEq(c.orgId, orgId)),
+        });
+        return row ? [row] : [{ id }];
+      } catch {
+        return [{ id }];
+      }
+    };
+
+    const MAX_UPDATE_RETRIES = 4;
     let updated;
     let lastUpdateError: unknown;
     for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
       try {
-        updated = await runUpdate(setValues);
+        updated = attempt < 3
+          ? await runUpdate(setValues)
+          : await runUpdateMinimal(setValues);
         break;
       } catch (error) {
         lastUpdateError = error;
         let retryable = false;
+
+        console.error(
+          `[campaigns:id:put] requestId=${requestId} update attempt=${attempt} failed:`,
+          error instanceof Error ? error.message : String(error)
+        );
 
         if (isMissingColumnError(error, 'recipient_filters')) {
           delete setValues.recipientFilters;
@@ -192,8 +219,22 @@ export async function PUT(
           delete setValues.signatureId;
           retryable = true;
         }
+        if (isMissingColumnError(error, 'total_recipients')) {
+          delete setValues.totalRecipients;
+          retryable = true;
+        }
+        if (!retryable && isMissingColumnErrorAny(error)) {
+          delete setValues.recipientFilters;
+          delete setValues.totalRecipients;
+          delete setValues.signatureId;
+          delete setValues.scheduledAt;
+          retryable = true;
+        }
         if (isForeignKeyError(error)) {
           setValues.signatureId = null;
+          retryable = true;
+        }
+        if (!retryable && attempt < MAX_UPDATE_RETRIES - 1) {
           retryable = true;
         }
 
@@ -221,8 +262,10 @@ export async function PUT(
     const assets = await listEmailAssetsForCampaign(orgId, id);
     return NextResponse.json({ ...updated[0], assets, requestId });
   } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error ?? 'unknown');
+    console.error(`[campaigns:id:put] requestId=${requestId} FINAL ERROR:`, error);
     return handleApiError('campaigns:id:put', error, requestId, {
-      message: 'Failed to update campaign',
+      message: `Failed to update campaign | ${detail}`,
     });
   }
 }

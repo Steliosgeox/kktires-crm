@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc --noEmit --pretty)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(cat:*)"
     ]
   }
 }
