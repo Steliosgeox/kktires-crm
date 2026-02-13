@@ -21,6 +21,11 @@ export interface RecipientFilters {
   categories: string[];
 }
 
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
+}
+
 export function normalizeRecipientFilters(input: unknown): RecipientFilters {
   const obj = (input && typeof input === 'object') ? (input as Record<string, unknown>) : {};
   const arr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string') as string[] : []);
@@ -122,12 +127,19 @@ async function getCustomerIdsForTags(orgId: string, tagIds: string[]): Promise<s
   return rows.map((r) => r.id);
 }
 
-async function buildRecipientWhere(orgId: string, filters: RecipientFilters) {
+async function buildRecipientWhere(
+  orgId: string,
+  filters: RecipientFilters,
+  options?: { includeUnsubscribedFilter?: boolean }
+) {
   const whereParts: any[] = [
     eq(customers.orgId, orgId),
     sql`${customers.email} IS NOT NULL`,
-    sql`(${customers.unsubscribed} = 0 OR ${customers.unsubscribed} IS NULL)`,
   ];
+
+  if (options?.includeUnsubscribedFilter !== false) {
+    whereParts.push(sql`(${customers.unsubscribed} = 0 OR ${customers.unsubscribed} IS NULL)`);
+  }
 
   if (filters.cities.length > 0) {
     whereParts.push(inArray(customers.city, filters.cities));
@@ -162,14 +174,25 @@ async function buildRecipientWhere(orgId: string, filters: RecipientFilters) {
 
 export async function countRecipients(orgId: string, rawFilters: unknown): Promise<number> {
   const filters = normalizeRecipientFilters(rawFilters);
-  const whereParts = await buildRecipientWhere(orgId, filters);
+  const runCount = async (includeUnsubscribedFilter: boolean) => {
+    const whereParts = await buildRecipientWhere(orgId, filters, { includeUnsubscribedFilter });
+    const [result] = await db
+      .select({ count: sql<number>`count(DISTINCT ${customers.id})` })
+      .from(customers)
+      .where(and(...whereParts));
 
-  const [result] = await db
-    .select({ count: sql<number>`count(DISTINCT ${customers.id})` })
-    .from(customers)
-    .where(and(...whereParts));
+    return result?.count || 0;
+  };
 
-  return result?.count || 0;
+  try {
+    return await runCount(true);
+  } catch (error) {
+    if (isMissingColumnError(error, 'unsubscribed')) {
+      // Backward compatibility for older DBs missing customers.unsubscribed.
+      return runCount(false);
+    }
+    throw error;
+  }
 }
 
 export async function selectRecipients(
@@ -188,21 +211,32 @@ export async function selectRecipients(
   }>
 > {
   const filters = normalizeRecipientFilters(rawFilters);
-  const whereParts = await buildRecipientWhere(orgId, filters);
+  const runSelect = async (includeUnsubscribedFilter: boolean) => {
+    const whereParts = await buildRecipientWhere(orgId, filters, { includeUnsubscribedFilter });
+    const rows = await db
+      .select({
+        id: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        company: customers.company,
+        city: customers.city,
+        phone: customers.phone,
+        mobile: customers.mobile,
+        email: customers.email,
+      })
+      .from(customers)
+      .where(and(...whereParts));
 
-  const rows = await db
-    .select({
-      id: customers.id,
-      firstName: customers.firstName,
-      lastName: customers.lastName,
-      company: customers.company,
-      city: customers.city,
-      phone: customers.phone,
-      mobile: customers.mobile,
-      email: customers.email,
-    })
-    .from(customers)
-    .where(and(...whereParts));
+    return rows.filter((r) => !!r.email) as any;
+  };
 
-  return rows.filter((r) => !!r.email) as any;
+  try {
+    return await runSelect(true);
+  } catch (error) {
+    if (isMissingColumnError(error, 'unsubscribed')) {
+      // Backward compatibility for older DBs missing customers.unsubscribed.
+      return runSelect(false);
+    }
+    throw error;
+  }
 }

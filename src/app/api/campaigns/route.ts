@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { emailCampaigns } from '@/lib/db/schema';
+import { emailCampaigns, emailSignatures } from '@/lib/db/schema';
 import {
   createRequestId,
   handleApiError,
+  jsonError,
   parsePagination,
   withValidatedBody,
 } from '@/server/api/http';
@@ -124,6 +125,18 @@ export async function POST(request: NextRequest) {
     const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 1_000_000 });
     const recipientFilters = normalizeRecipientFilters(body.recipientFilters);
     const totalRecipients = await countRecipients(orgId, recipientFilters);
+    let signatureId: string | null = null;
+    if (body.signatureId) {
+      const [signature] = await db
+        .select({ id: emailSignatures.id })
+        .from(emailSignatures)
+        .where(and(eq(emailSignatures.id, body.signatureId), eq(emailSignatures.orgId, orgId)))
+        .limit(1);
+      if (!signature) {
+        return jsonError('Selected signature not found', 400, 'BAD_REQUEST', requestId);
+      }
+      signatureId = body.signatureId;
+    }
 
     let scheduledAtDate: Date | null = null;
     if (body.scheduledAt) {
@@ -145,7 +158,7 @@ export async function POST(request: NextRequest) {
         scheduledAt: scheduledAtDate,
         totalRecipients,
         recipientFilters,
-        signatureId: body.signatureId || null,
+        signatureId,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
