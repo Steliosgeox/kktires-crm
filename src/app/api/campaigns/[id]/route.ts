@@ -26,7 +26,7 @@ const campaignStatusSchema = z.enum([
 const campaignUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   subject: z.string().trim().max(300).optional(),
-  content: z.string().max(500_000).optional(),
+  content: z.string().max(5_000_000).optional(),
   status: campaignStatusSchema.optional(),
   scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: z.unknown().optional(),
@@ -72,7 +72,7 @@ export async function PUT(
     const orgId = getOrgIdFromSession(session);
 
     const { id } = await params;
-    const body = await withValidatedBody(request, campaignUpdateSchema, { maxBytes: 1_000_000 });
+    const body = await withValidatedBody(request, campaignUpdateSchema, { maxBytes: 6_000_000 });
 
     let scheduledAtDate: Date | null = null;
     if (body.scheduledAt) {

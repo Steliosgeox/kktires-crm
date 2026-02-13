@@ -28,7 +28,7 @@ const campaignStatusSchema = z.enum([
 const campaignCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   subject: z.string().trim().max(300).optional(),
-  content: z.string().max(500_000).optional(),
+  content: z.string().max(5_000_000).optional(),
   status: campaignStatusSchema.optional(),
   scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: z.unknown().optional(),
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       console.error(`[campaigns:post] requestId=${requestId} ensureOrganizationExists failed`, error);
     }
 
-    const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 1_000_000 });
+    const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 6_000_000 });
     const recipientFilters = normalizeRecipientFilters(body.recipientFilters);
     let totalRecipients = 0;
     try {

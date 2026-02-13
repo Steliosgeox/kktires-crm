@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import {
   Send,
   Clock,
@@ -113,6 +113,7 @@ export function OutlookEditor({
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const lastAppliedRef = useRef<{ key: string; content: string } | null>(null);
 
   const totalRecipients = recipientCount ?? 0;
@@ -154,6 +155,57 @@ export function OutlookEditor({
     if (!raw) return;
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     applyEditorCommand('createLink', url);
+  };
+
+  const handleInsertImageClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleImageSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error(
+        'Μη έγκυρος τύπος αρχείου',
+        'Επιλέξτε εικόνα (PNG, JPG, WEBP ή GIF).'
+      );
+      return;
+    }
+
+    const maxBytes = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxBytes) {
+      toast.warning(
+        'Η εικόνα είναι πολύ μεγάλη',
+        'Χρησιμοποιήστε εικόνα έως 2MB για σταθερή αποθήκευση campaign.'
+      );
+      return;
+    }
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read image file'));
+        reader.readAsDataURL(file);
+      });
+
+      if (!editorRef.current) return;
+      editorRef.current.focus();
+      document.execCommand(
+        'insertHTML',
+        false,
+        `<img src="${dataUrl}" alt="" style="max-width:100%;height:auto;" />`
+      );
+      setContent(editorRef.current.innerHTML);
+    } catch (error) {
+      console.error('Image insert error:', error);
+      toast.error(
+        'Αποτυχία εισαγωγής εικόνας',
+        'Η εικόνα δεν μπόρεσε να προστεθεί στο email.'
+      );
+    }
   };
 
   const handleApplyTemplate = (template: Template) => {
@@ -647,12 +699,19 @@ export function OutlookEditor({
               </button>
               <button
                 type="button"
-                disabled
-                className="p-1.5 rounded-md transition-colors opacity-50 cursor-not-allowed"
-                title="Not implemented yet"
+                onClick={handleInsertImageClick}
+                className="p-1.5 rounded-md transition-colors hover:bg-[var(--outlook-bg-hover)]"
+                title="Insert image"
               >
                 <ImageIcon className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={handleImageSelected}
+              />
             </div>
 
             {/* Templates Dropdown */}
