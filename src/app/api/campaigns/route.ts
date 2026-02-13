@@ -210,15 +210,22 @@ export async function POST(request: NextRequest) {
       console.error(`[campaigns:post] requestId=${requestId} recipient count failed`, error);
     }
     let content = body.content || '';
-    const migratedInline = await migrateInlineDataImagesToAssets({
-      html: content,
-      orgId,
-      uploaderUserId: session.user.id,
-    });
-    content = migratedInline.html;
+    let migratedInlineImages: Awaited<ReturnType<typeof migrateInlineDataImagesToAssets>>['inlineImages'] = [];
+    try {
+      const migratedInline = await migrateInlineDataImagesToAssets({
+        html: content,
+        orgId,
+        uploaderUserId: session.user.id,
+      });
+      content = migratedInline.html;
+      migratedInlineImages = migratedInline.inlineImages;
+    } catch (error) {
+      // Blob storage may not be configured; proceed with raw content.
+      console.error(`[campaigns:post] requestId=${requestId} inline image migration failed`, error);
+    }
 
     const normalizedAssets = normalizeCampaignAssetsInput(body.assets);
-    for (const migrated of migratedInline.inlineImages) {
+    for (const migrated of migratedInlineImages) {
       if (!normalizedAssets.inlineImages.some((item) => item.assetId === migrated.assetId)) {
         normalizedAssets.inlineImages.push(migrated);
       }
@@ -226,15 +233,21 @@ export async function POST(request: NextRequest) {
 
     let signatureId: string | null = null;
     if (body.signatureId) {
-      const [signature] = await db
-        .select({ id: emailSignatures.id })
-        .from(emailSignatures)
-        .where(and(eq(emailSignatures.id, body.signatureId), eq(emailSignatures.orgId, orgId)))
-        .limit(1);
-      if (!signature) {
-        return jsonError('Selected signature not found', 400, 'BAD_REQUEST', requestId);
+      try {
+        const [signature] = await db
+          .select({ id: emailSignatures.id })
+          .from(emailSignatures)
+          .where(and(eq(emailSignatures.id, body.signatureId), eq(emailSignatures.orgId, orgId)))
+          .limit(1);
+        if (!signature) {
+          return jsonError('Selected signature not found', 400, 'BAD_REQUEST', requestId);
+        }
+        signatureId = body.signatureId;
+      } catch (sigError) {
+        // Signature table may not exist or query may fail; proceed without a signature.
+        console.error(`[campaigns:post] requestId=${requestId} signature lookup failed`, sigError);
+        signatureId = null;
       }
-      signatureId = body.signatureId;
     }
 
     let scheduledAtDate: Date | null = null;
@@ -263,40 +276,48 @@ export async function POST(request: NextRequest) {
     const insertCampaign = async (values: Record<string, unknown>) =>
       db.insert(emailCampaigns).values(values as any).returning();
 
+    const MAX_INSERT_RETRIES = 3;
     let newCampaign;
-    try {
-      newCampaign = await insertCampaign(campaignValues);
-    } catch (error) {
-      // Legacy DB fallback: retry without newer optional columns.
-      if (isMissingColumnError(error, 'recipient_filters')) {
-        delete campaignValues.recipientFilters;
-      }
-      if (isMissingColumnError(error, 'signature_id')) {
-        delete campaignValues.signatureId;
-      }
-
-      if (isForeignKeyError(error)) {
-        // Retry with no signature FK and ensure org exists one more time.
-        campaignValues.signatureId = null;
-        try {
-          await ensureOrganizationExists(orgId);
-        } catch (ensureError) {
-          console.error(
-            `[campaigns:post] requestId=${requestId} ensureOrganizationExists retry failed`,
-            ensureError
-          );
-        }
-      }
-
-      if (
-        isMissingColumnError(error, 'recipient_filters') ||
-        isMissingColumnError(error, 'signature_id') ||
-        isForeignKeyError(error)
-      ) {
+    let lastInsertError: unknown;
+    for (let attempt = 0; attempt < MAX_INSERT_RETRIES; attempt++) {
+      try {
         newCampaign = await insertCampaign(campaignValues);
-      } else {
-        throw error;
+        break;
+      } catch (error) {
+        lastInsertError = error;
+        let retryable = false;
+
+        if (isMissingColumnError(error, 'recipient_filters')) {
+          delete campaignValues.recipientFilters;
+          delete campaignValues.totalRecipients;
+          retryable = true;
+        }
+        if (isMissingColumnError(error, 'signature_id')) {
+          delete campaignValues.signatureId;
+          retryable = true;
+        }
+        if (isForeignKeyError(error)) {
+          campaignValues.signatureId = null;
+          try {
+            await ensureOrganizationExists(orgId);
+          } catch (ensureError) {
+            console.error(
+              `[campaigns:post] requestId=${requestId} ensureOrganizationExists retry failed`,
+              ensureError
+            );
+          }
+          retryable = true;
+        }
+
+        if (!retryable) {
+          throw error;
+        }
+        // Loop continues with fixed values for next attempt.
       }
+    }
+    if (!newCampaign) {
+      // All retries exhausted – throw the last error to surface it properly.
+      throw lastInsertError;
     }
 
     const campaignId = newCampaign[0].id as string;

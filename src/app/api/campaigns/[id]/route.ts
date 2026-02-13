@@ -139,16 +139,22 @@ export async function PUT(
     if (body.subject !== undefined) setValues.subject = body.subject;
     const normalizedAssets = normalizeCampaignAssetsInput(body.assets);
     if (body.content !== undefined) {
-      const migratedInline = await migrateInlineDataImagesToAssets({
-        html: body.content,
-        orgId,
-        uploaderUserId: session.user.id,
-      });
-      setValues.content = migratedInline.html;
-      for (const migrated of migratedInline.inlineImages) {
-        if (!normalizedAssets.inlineImages.some((item) => item.assetId === migrated.assetId)) {
-          normalizedAssets.inlineImages.push(migrated);
+      try {
+        const migratedInline = await migrateInlineDataImagesToAssets({
+          html: body.content,
+          orgId,
+          uploaderUserId: session.user.id,
+        });
+        setValues.content = migratedInline.html;
+        for (const migrated of migratedInline.inlineImages) {
+          if (!normalizedAssets.inlineImages.some((item) => item.assetId === migrated.assetId)) {
+            normalizedAssets.inlineImages.push(migrated);
+          }
         }
+      } catch (error) {
+        // Blob storage may not be configured; proceed with raw content.
+        console.error(`[campaigns:id:put] requestId=${requestId} inline image migration failed`, error);
+        setValues.content = body.content;
       }
     }
     if (body.status !== undefined) setValues.status = body.status;
@@ -166,31 +172,38 @@ export async function PUT(
         .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
         .returning();
 
+    const MAX_UPDATE_RETRIES = 3;
     let updated;
-    try {
-      updated = await runUpdate(setValues);
-    } catch (error) {
-      // Legacy DB fallback: retry without newer optional columns that may not exist yet.
-      if (isMissingColumnError(error, 'recipient_filters')) {
-        delete setValues.recipientFilters;
-        delete setValues.totalRecipients;
-      }
-      if (isMissingColumnError(error, 'signature_id')) {
-        delete setValues.signatureId;
-      }
-      if (isForeignKeyError(error)) {
-        setValues.signatureId = null;
-      }
-
-      if (
-        isMissingColumnError(error, 'recipient_filters') ||
-        isMissingColumnError(error, 'signature_id') ||
-        isForeignKeyError(error)
-      ) {
+    let lastUpdateError: unknown;
+    for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
+      try {
         updated = await runUpdate(setValues);
-      } else {
-        throw error;
+        break;
+      } catch (error) {
+        lastUpdateError = error;
+        let retryable = false;
+
+        if (isMissingColumnError(error, 'recipient_filters')) {
+          delete setValues.recipientFilters;
+          delete setValues.totalRecipients;
+          retryable = true;
+        }
+        if (isMissingColumnError(error, 'signature_id')) {
+          delete setValues.signatureId;
+          retryable = true;
+        }
+        if (isForeignKeyError(error)) {
+          setValues.signatureId = null;
+          retryable = true;
+        }
+
+        if (!retryable) {
+          throw error;
+        }
       }
+    }
+    if (!updated) {
+      throw lastUpdateError;
     }
 
     if (updated.length === 0) {
