@@ -22,7 +22,15 @@ export interface RecipientFilters {
 }
 
 function isMissingColumnError(error: unknown, columnName: string): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.message);
+    if (error.cause instanceof Error) parts.push(error.cause.message);
+    else if (error.cause) parts.push(String(error.cause));
+  } else {
+    parts.push(String(error ?? ''));
+  }
+  const message = parts.join(' | ');
   return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
 }
 

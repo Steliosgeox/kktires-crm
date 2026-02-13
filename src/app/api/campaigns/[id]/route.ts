@@ -19,18 +19,31 @@ import {
 import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
+/** Extract the full error text including DrizzleQueryError's `.cause`. */
+function getErrorMessages(error: unknown): string {
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.message);
+    if (error.cause instanceof Error) parts.push(error.cause.message);
+    else if (error.cause) parts.push(String(error.cause));
+  } else {
+    parts.push(String(error ?? ''));
+  }
+  return parts.join(' | ');
+}
+
 function isMissingColumnError(error: unknown, columnName: string): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
 }
 
 function isMissingColumnErrorAny(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /no such column/i.test(message);
 }
 
 function isForeignKeyError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /foreign key/i.test(message);
 }
 
@@ -207,7 +220,7 @@ export async function PUT(
 
         console.error(
           `[campaigns:id:put] requestId=${requestId} update attempt=${attempt} failed:`,
-          error instanceof Error ? error.message : String(error)
+          getErrorMessages(error)
         );
 
         if (isMissingColumnError(error, 'recipient_filters')) {
@@ -262,7 +275,7 @@ export async function PUT(
     const assets = await listEmailAssetsForCampaign(orgId, id);
     return NextResponse.json({ ...updated[0], assets, requestId });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error ?? 'unknown');
+    const detail = getErrorMessages(error);
     console.error(`[campaigns:id:put] requestId=${requestId} FINAL ERROR:`, error);
     return handleApiError('campaigns:id:put', error, requestId, {
       message: `Failed to update campaign | ${detail}`,

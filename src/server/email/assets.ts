@@ -94,7 +94,15 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 function isMissingSchemaError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.message);
+    if (error.cause instanceof Error) parts.push(error.cause.message);
+    else if (error.cause) parts.push(String(error.cause));
+  } else {
+    parts.push(String(error ?? ''));
+  }
+  const message = parts.join(' | ');
   return (
     /no such table/i.test(message) ||
     /no such column/i.test(message) ||

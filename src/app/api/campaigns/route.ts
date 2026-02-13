@@ -58,23 +58,37 @@ const campaignCreateSchema = z.object({
     .optional(),
 });
 
+/** Extract the full error text including DrizzleQueryError's `.cause`. */
+function getErrorMessages(error: unknown): string {
+  const parts: string[] = [];
+  if (error instanceof Error) {
+    parts.push(error.message);
+    // DrizzleQueryError stores the actual DB error in `.cause`
+    if (error.cause instanceof Error) parts.push(error.cause.message);
+    else if (error.cause) parts.push(String(error.cause));
+  } else {
+    parts.push(String(error ?? ''));
+  }
+  return parts.join(' | ');
+}
+
 function isMissingColumnError(error: unknown, columnName: string): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
 }
 
 function isMissingColumnErrorAny(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /no such column/i.test(message);
 }
 
 function isForeignKeyError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /foreign key/i.test(message);
 }
 
 function isMissingTableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '');
+  const message = getErrorMessages(error);
   return /no such table/i.test(message);
 }
 
@@ -316,7 +330,7 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         lastInsertError = error;
         let retryable = false;
-        const errMsg = error instanceof Error ? error.message : String(error);
+        const errMsg = getErrorMessages(error);
 
         console.error(
           `[campaigns:post] requestId=${requestId} insert attempt=${attempt} failed:`,
@@ -400,7 +414,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...newCampaign[0], requestId, assets: normalizedAssets }, { status: 201 });
   } catch (error) {
     // Surface the actual error detail so production failures are diagnosable.
-    const detail = error instanceof Error ? error.message : String(error ?? 'unknown');
+    const detail = getErrorMessages(error);
     console.error(`[campaigns:post] requestId=${requestId} FINAL ERROR:`, error);
     return handleApiError('campaigns:post', error, requestId, {
       message: `Failed to create campaign | ${detail}`,
