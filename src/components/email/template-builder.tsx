@@ -290,7 +290,7 @@ export function TemplateBuilder({ initialBlocks = [], templateName = '', onSave 
                   )}
                   {block.type === 'image' && (
                     block.content.src ? (
-                      <img src={block.content.src} alt={block.content.alt} className="max-w-full h-auto" />
+                      <img src={block.content.src} alt={block.content.alt || ''} className="max-w-full h-auto" />
                     ) : (
                       <div className="h-32 bg-zinc-100 flex items-center justify-center text-zinc-400">
                         <Image className="h-8 w-8" />

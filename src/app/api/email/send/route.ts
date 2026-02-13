@@ -3,8 +3,8 @@ import { z } from 'zod';
 
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 import { createRequestId, handleApiError, withValidatedBody } from '@/server/api/http';
-import { getGmailAccessToken, sendGmailEmail } from '@/server/email/gmail';
 import { enqueueCampaignSend } from '@/server/email/job-queue';
+import { sendEmail } from '@/server/email/transport';
 
 const SendSingleEmailSchema = z.object({
   to: z.string().trim().email().max(254),
@@ -35,33 +35,32 @@ export async function POST(request: NextRequest) {
     });
     const { to, subject, content, html = true } = body;
 
-    const accessToken = await getGmailAccessToken(session.user.id);
-    if (!accessToken) {
-      return NextResponse.json(
-        {
-          error: 'Gmail not connected. Please sign out and sign in again to grant Gmail permissions.',
-          code: 'FORBIDDEN',
-          requestId,
-        },
-        { status: 403 }
-      );
-    }
-
-    const success = await sendGmailEmail(accessToken, {
+    const result = await sendEmail({
       to,
       subject,
-      body: content,
-      html,
+      ...(html ? { html: content } : { text: content }),
     });
 
-    if (!success) {
+    if (!result.ok) {
+      const status = result.errorCode === 'SMTP_NOT_CONFIGURED' ? 503 : 502;
       return NextResponse.json(
-        { error: 'Failed to send email via Gmail API', code: 'INTERNAL_ERROR', requestId },
-        { status: 500 }
+        {
+          error: result.errorMessage,
+          code: result.errorCode,
+          provider: result.provider,
+          requestId,
+        },
+        { status }
       );
     }
 
-    return NextResponse.json({ success: true, requestId, message: 'Email sent successfully' });
+    return NextResponse.json({
+      success: true,
+      requestId,
+      message: 'Email sent successfully',
+      provider: result.provider,
+      messageId: result.messageId ?? null,
+    });
   } catch (error) {
     return handleApiError('email:send-single', error, requestId, {
       message: 'Failed to send email',
@@ -94,7 +93,7 @@ export async function PUT(request: NextRequest) {
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, code: 'BAD_REQUEST', requestId },
+        { error: result.error, code: result.code || 'BAD_REQUEST', requestId },
         { status: result.status }
       );
     }

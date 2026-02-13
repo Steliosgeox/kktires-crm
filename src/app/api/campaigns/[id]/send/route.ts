@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, code: 'BAD_REQUEST', requestId },
+        { error: result.error, code: result.code || 'BAD_REQUEST', requestId },
         { status: result.status }
       );
     }

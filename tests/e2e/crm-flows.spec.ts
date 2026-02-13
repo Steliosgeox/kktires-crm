@@ -103,6 +103,24 @@ test('campaign draft-save-schedule send flow works', async ({ page }) => {
   expect(typeof sendPayload.jobId).toBe('string');
 });
 
+test('direct email send returns actionable SMTP failure details when transport cannot connect', async ({ page }) => {
+  const sendRes = await page.request.post('/api/email/send', {
+    data: {
+      to: 'receiver@example.com',
+      subject: 'SMTP connectivity test',
+      content: '<p>test</p>',
+      html: true,
+    },
+  });
+
+  expect(sendRes.status()).toBe(502);
+  const payload = await sendRes.json();
+  expect(payload.code).toBe('SMTP_SEND_FAILED');
+  expect(typeof payload.error).toBe('string');
+  expect(payload.error.length).toBeGreaterThan(0);
+  expect(typeof payload.requestId).toBe('string');
+});
+
 test('export download neutralizes spreadsheet formulas', async ({ page }) => {
   const seed = Date.now().toString();
   const createRes = await page.request.post('/api/customers', {

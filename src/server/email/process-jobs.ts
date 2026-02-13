@@ -1,12 +1,11 @@
 import { db } from '@/lib/db';
-import { campaignRecipients, customers, emailCampaigns, emailJobs, emailJobItems, emailSignatures } from '@/lib/db/schema';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { campaignRecipients, customers, emailCampaigns, emailJobs, emailJobItems } from '@/lib/db/schema';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { claimNextDueEmailJob, markEmailJobCompleted, markEmailJobFailed, yieldEmailJob } from './job-queue';
 import { selectRecipients } from './recipients';
-import { getGmailAccessToken, sendGmailEmail } from './gmail';
-import { isSmtpConfigured, sendSmtpEmail } from './smtp';
+import { ensureEmailTransportReady, sendEmail } from './transport';
 import {
   appendUnsubscribeFooter,
   buildOpenPixelUrl,
@@ -40,6 +39,20 @@ function getIntEnv(name: string, fallback: number): number {
   if (!raw) return fallback;
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function toErrorMessage(error: unknown, fallback = 'Unknown error'): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+  return fallback;
+}
+
+function truncateFailure(message: string): string {
+  return message.slice(0, 1000);
 }
 
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -165,7 +178,13 @@ async function ensureJobQueue(job: EmailJobRow) {
     .select({ count: sql<number>`count(*)` })
     .from(emailJobItems)
     .innerJoin(campaignRecipients, eq(campaignRecipients.id, emailJobItems.recipientId))
-    .where(and(eq(emailJobItems.jobId, job.id), eq(campaignRecipients.status, 'pending')));
+    .where(
+      and(
+        eq(emailJobItems.jobId, job.id),
+        eq(campaignRecipients.status, 'pending'),
+        inArray(emailJobItems.status, ['pending', 'processing'])
+      )
+    );
 
   const queuedForPending = Number(queuedForPendingRow?.count || 0);
   if (queuedForPending === pendingRecipients) return { ok: true as const, pendingRecipients };
@@ -175,7 +194,7 @@ async function ensureJobQueue(job: EmailJobRow) {
   const existing = await db
     .select({ recipientId: emailJobItems.recipientId })
     .from(emailJobItems)
-    .where(eq(emailJobItems.jobId, job.id));
+    .where(and(eq(emailJobItems.jobId, job.id), inArray(emailJobItems.status, ['pending', 'processing'])));
   const existingSet = new Set(existing.map((r) => r.recipientId));
 
   const recipientIds = await db
@@ -229,15 +248,22 @@ async function finalizeCampaignIfDone(job: EmailJobRow) {
     .from(campaignRecipients)
     .where(and(eq(campaignRecipients.campaignId, job.campaignId), eq(campaignRecipients.status, 'sent')));
 
+  const [failedRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(campaignRecipients)
+    .where(and(eq(campaignRecipients.campaignId, job.campaignId), eq(campaignRecipients.status, 'failed')));
+
   const total = Number(totalRow?.count || 0);
   const sent = Number(sentRow?.count || 0);
+  const failed = Number(failedRow?.count || 0);
+  const status = failed > 0 ? 'failed' : 'sent';
   const now = new Date();
 
   await db
     .update(emailCampaigns)
     .set({
-      status: 'sent',
-      sentAt: now,
+      status,
+      sentAt: status === 'sent' ? now : null,
       totalRecipients: total,
       sentCount: sent,
       updatedAt: now,
@@ -245,7 +271,7 @@ async function finalizeCampaignIfDone(job: EmailJobRow) {
     .where(eq(emailCampaigns.id, job.campaignId))
     .catch(() => undefined);
 
-  return { ok: true as const, done: true, total, sent };
+  return { ok: true as const, done: true, total, sent, failed, status };
 }
 
 async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number }) {
@@ -267,24 +293,15 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
     return { ok: true as const, sent: 0, failed: 0, processed: 0, done: true };
   }
 
-  // Sending strategy:
-  // - If SMTP is configured and the campaign is set to send from a non-Gmail mailbox (e.g. info@kktires.gr),
-  //   use SMTP (Roundcube/webmail accounts usually expose SMTP).
-  // - Otherwise, default to Gmail API using the logged-in user's connected Google account.
-  const useSmtp =
-    isSmtpConfigured() &&
-    !!campaign.fromEmail &&
-    !String(campaign.fromEmail).toLowerCase().endsWith('@gmail.com');
-
-  const accessToken = useSmtp ? null : await getGmailAccessToken(job.senderUserId);
-  if (!useSmtp && !accessToken) {
-    await markEmailJobFailed(job.id, 'Gmail not connected');
+  const readiness = ensureEmailTransportReady();
+  if (!readiness.ok) {
+    await markEmailJobFailed(job.id, readiness.errorMessage);
     await db
       .update(emailCampaigns)
       .set({ status: 'failed', updatedAt: new Date() })
       .where(eq(emailCampaigns.id, job.campaignId))
       .catch(() => undefined);
-    return { ok: false as const, error: 'Gmail not connected' };
+    return { ok: false as const, error: readiness.errorMessage };
   }
 
   // Ensure we have the full recipient snapshot for this campaign.
@@ -313,6 +330,11 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
   const queue = await ensureJobQueue(job);
   if (!queue.ok) {
     await markEmailJobFailed(job.id, 'Failed to initialize job queue');
+    await db
+      .update(emailCampaigns)
+      .set({ status: 'failed', updatedAt: new Date() })
+      .where(eq(emailCampaigns.id, job.campaignId))
+      .catch(() => undefined);
     return { ok: false as const, error: 'Failed to initialize job queue' };
   }
 
@@ -362,6 +384,7 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
 
     for (const group of chunk(items, concurrency)) {
       const groupStart = Date.now();
+      type ProcessItemResult = { ok: boolean; skipped?: boolean; sent?: boolean };
       const results = await Promise.allSettled(
         group.map(async (item) => {
           const now = new Date();
@@ -376,65 +399,93 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
             return { ok: false as const, skipped: true as const };
           }
 
-          const vars: Record<string, string> = {
-            '{{firstName}}': item.firstName || '',
-            '{{lastName}}': item.lastName || '',
-            '{{company}}': item.company || '',
-            '{{email}}': item.recipientEmail || '',
-            '{{city}}': item.city || '',
-            '{{phone}}': item.phone || item.mobile || '',
-          };
+          try {
+            const vars: Record<string, string> = {
+              '{{firstName}}': item.firstName || '',
+              '{{lastName}}': item.lastName || '',
+              '{{company}}': item.company || '',
+              '{{email}}': item.recipientEmail || '',
+              '{{city}}': item.city || '',
+              '{{phone}}': item.phone || item.mobile || '',
+            };
 
-          const subject = personalize(campaign.subject, vars);
-          let content = appendSignatureHtml(personalize(campaign.content, vars), signature?.content || null);
+            const subject = personalize(campaign.subject, vars);
+            let content = appendSignatureHtml(personalize(campaign.content, vars), signature?.content || null);
 
-          const pixelUrl = buildOpenPixelUrl({ campaignId: job.campaignId, recipientId: item.recipientId });
-          const unsubscribeUrl = buildUnsubscribeUrl({ campaignId: job.campaignId, recipientId: item.recipientId });
+            const pixelUrl = buildOpenPixelUrl({ campaignId: job.campaignId, recipientId: item.recipientId });
+            const unsubscribeUrl = buildUnsubscribeUrl({ campaignId: job.campaignId, recipientId: item.recipientId });
 
-          content = rewriteHtmlLinksForClickTracking({
-            html: content,
-            campaignId: job.campaignId,
-            recipientId: item.recipientId,
-          });
-          content = injectOpenPixel(content, pixelUrl);
-          content = appendUnsubscribeFooter(content, unsubscribeUrl);
+            content = rewriteHtmlLinksForClickTracking({
+              html: content,
+              campaignId: job.campaignId,
+              recipientId: item.recipientId,
+            });
+            content = injectOpenPixel(content, pixelUrl);
+            content = appendUnsubscribeFooter(content, unsubscribeUrl);
 
-          const headers: Record<string, string> = {};
-          if (unsubscribeUrl) {
-            headers['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
-          }
+            const headers: Record<string, string> = {};
+            if (unsubscribeUrl) {
+              headers['List-Unsubscribe'] = `<${unsubscribeUrl}>`;
+            }
 
-          const ok = useSmtp
-            ? await sendSmtpEmail({
-                to: item.recipientEmail,
-                subject,
-                html: content,
-                headers,
-                from: campaign.fromEmail || undefined,
+            const sendResult = await sendEmail({
+              to: item.recipientEmail,
+              subject,
+              html: content,
+              headers,
+              from: campaign.fromEmail || undefined,
+            });
+
+            const failureMessage = sendResult.ok
+              ? null
+              : truncateFailure(`${sendResult.errorCode}: ${sendResult.errorMessage}`);
+
+            await db
+              .update(campaignRecipients)
+              .set({
+                status: sendResult.ok ? 'sent' : 'failed',
+                sentAt: sendResult.ok ? now : null,
+                errorMessage: failureMessage,
               })
-            : await sendGmailEmail(accessToken as string, {
-                to: item.recipientEmail,
-                subject,
-                body: content,
-                html: true,
-                headers,
-              });
+              .where(eq(campaignRecipients.id, item.recipientId));
 
-          await db
-            .update(campaignRecipients)
-            .set({
-              status: ok ? 'sent' : 'failed',
-              sentAt: ok ? now : null,
-              errorMessage: ok ? null : 'Failed to send',
-            })
-            .where(eq(campaignRecipients.id, item.recipientId));
+            await db
+              .update(emailJobItems)
+              .set({
+                status: sendResult.ok ? 'sent' : 'failed',
+                sentAt: sendResult.ok ? now : null,
+                errorMessage: failureMessage,
+                updatedAt: new Date(),
+              })
+              .where(eq(emailJobItems.id, item.jobItemId));
 
-          await db
-            .delete(emailJobItems)
-            .where(eq(emailJobItems.id, item.jobItemId))
-            .catch(() => undefined);
+            return { ok: true as const, sent: sendResult.ok };
+          } catch (error) {
+            const reason = truncateFailure(toErrorMessage(error, 'Failed to process email item'));
 
-          return { ok: true as const, sent: ok };
+            await db
+              .update(campaignRecipients)
+              .set({
+                status: 'failed',
+                sentAt: null,
+                errorMessage: reason,
+              })
+              .where(eq(campaignRecipients.id, item.recipientId))
+              .catch(() => undefined);
+
+            await db
+              .update(emailJobItems)
+              .set({
+                status: 'failed',
+                sentAt: null,
+                errorMessage: reason,
+                updatedAt: new Date(),
+              })
+              .where(eq(emailJobItems.id, item.jobItemId))
+              .catch(() => undefined);
+
+            return { ok: true as const, sent: false };
+          }
         })
       );
 
@@ -443,9 +494,10 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
           failed++;
           return;
         }
-        if ((r.value as any)?.skipped) return;
+        const value = r.value as ProcessItemResult;
+        if (value.skipped) return;
         processed++;
-        if ((r.value as any)?.sent) sent++;
+        if (value.sent) sent++;
         else failed++;
       });
 

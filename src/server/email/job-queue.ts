@@ -2,8 +2,9 @@ import os from 'os';
 
 import { db } from '@/lib/db';
 import { emailCampaigns, emailJobs } from '@/lib/db/schema';
-import { and, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { ensureEmailTransportReady } from './transport';
 
 export type EmailJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
@@ -41,11 +42,26 @@ export async function enqueueCampaignSend(params: {
   });
 
   if (!campaign) {
-    return { ok: false as const, status: 404, error: 'Campaign not found' };
+    return { ok: false as const, status: 404, error: 'Campaign not found', code: 'NOT_FOUND' as const };
   }
 
   if (campaign.status === 'sent') {
-    return { ok: false as const, status: 409, error: 'Campaign is already sent' };
+    return {
+      ok: false as const,
+      status: 409,
+      error: 'Campaign is already sent',
+      code: 'ALREADY_SENT' as const,
+    };
+  }
+
+  const transport = ensureEmailTransportReady();
+  if (!transport.ok) {
+    return {
+      ok: false as const,
+      status: 503,
+      error: transport.errorMessage,
+      code: transport.errorCode,
+    };
   }
 
   const existing = await db.query.emailJobs.findFirst({

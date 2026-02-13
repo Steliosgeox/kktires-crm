@@ -48,6 +48,14 @@ interface RecipientFilters {
   categories: string[];
 }
 
+type ApiFailure = {
+  message: string;
+  status: number;
+  code: string | null;
+  requestId: string | null;
+  unauthorized: boolean;
+};
+
 export default function EmailPage() {
   const router = useRouter();
 
@@ -192,6 +200,35 @@ export default function EmailPage() {
     fetchData();
   }, [fetchData]);
 
+  const readApiFailure = async (response: Response, fallback: string): Promise<ApiFailure> => {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    const data = (payload && typeof payload === 'object') ? (payload as Record<string, unknown>) : {};
+    const message = typeof data.error === 'string'
+      ? data.error
+      : `${fallback} (${response.status} ${response.statusText || 'Request failed'})`;
+
+    return {
+      message,
+      status: response.status,
+      code: typeof data.code === 'string' ? data.code : null,
+      requestId: typeof data.requestId === 'string' ? data.requestId : null,
+      unauthorized: response.status === 401,
+    };
+  };
+
+  const formatApiFailure = (failure: ApiFailure) => {
+    const parts = [failure.message];
+    if (failure.code) parts.push(`[${failure.code}]`);
+    if (failure.requestId) parts.push(`requestId: ${failure.requestId}`);
+    return parts.join(' | ');
+  };
+
   // Fetch recipient count when filters change
   useEffect(() => {
     const fetchRecipientCount = async () => {
@@ -316,7 +353,11 @@ export default function EmailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save campaign');
+        const failure = await readApiFailure(response, 'Failed to save campaign');
+        if (failure.unauthorized) {
+          router.push('/login');
+        }
+        throw new Error(formatApiFailure(failure));
       }
 
       const saved = await response.json();
@@ -324,9 +365,16 @@ export default function EmailPage() {
 
       if (sendNow) {
         // Trigger send for the saved campaign
-        await fetch(`/api/campaigns/${campaignId}/send`, {
+        const sendResponse = await fetch(`/api/campaigns/${campaignId}/send`, {
           method: 'POST',
         });
+        if (!sendResponse.ok) {
+          const failure = await readApiFailure(sendResponse, 'Failed to enqueue campaign');
+          if (failure.unauthorized) {
+            router.push('/login');
+          }
+          throw new Error(formatApiFailure(failure));
+        }
       }
 
       // Refresh data
@@ -339,7 +387,7 @@ export default function EmailPage() {
       resetEditor();
     } catch (err) {
       console.error('Error saving campaign:', err);
-      setError('Αποτυχία αποθήκευσης');
+      setError(err instanceof Error ? err.message : 'Αποτυχία αποθήκευσης');
     } finally {
       setSaving(false);
       setSending(false);
@@ -370,17 +418,28 @@ export default function EmailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save campaign');
+        const failure = await readApiFailure(response, 'Failed to save campaign');
+        if (failure.unauthorized) {
+          router.push('/login');
+        }
+        throw new Error(formatApiFailure(failure));
       }
 
       const saved = await response.json();
       const campaignId = saved?.id || selectedCampaignId;
 
-      await fetch(`/api/campaigns/${campaignId}/send`, {
+      const sendResponse = await fetch(`/api/campaigns/${campaignId}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runAt: runAtIso }),
       });
+      if (!sendResponse.ok) {
+        const failure = await readApiFailure(sendResponse, 'Failed to enqueue scheduled campaign');
+        if (failure.unauthorized) {
+          router.push('/login');
+        }
+        throw new Error(formatApiFailure(failure));
+      }
 
       await fetchData();
 
@@ -390,7 +449,7 @@ export default function EmailPage() {
       resetEditor();
     } catch (err) {
       console.error('Error scheduling campaign:', err);
-      setError('Αποτυχία προγραμματισμού');
+      setError(err instanceof Error ? err.message : 'Αποτυχία προγραμματισμού');
     } finally {
       setSaving(false);
     }

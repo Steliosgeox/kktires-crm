@@ -1,4 +1,14 @@
 {
   "installCommand": "npm install",
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/email-jobs",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/geocode-customers",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

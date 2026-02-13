@@ -1,31 +1,26 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Send,
   Clock,
   ChevronDown,
-  Users,
-  Paperclip,
   Sparkles,
   FileText,
-  X,
   Plus,
   Monitor,
   Smartphone,
   Moon,
   Eye,
-  MoreHorizontal,
   Bold,
   Italic,
   Underline,
   List,
   ListOrdered,
   Link,
-  Image,
+  Image as ImageIcon,
   AlignLeft,
   Variable,
-  Trash2,
   Save,
 } from 'lucide-react';
 import { toast } from '@/lib/stores/ui-store';
@@ -110,7 +105,6 @@ export function OutlookEditor({
   recipientCount,
 }: OutlookEditorProps) {
   const [showTemplates, setShowTemplates] = useState(false);
-  const [showSignatures, setShowSignatures] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile' | 'dark'>('desktop');
@@ -657,7 +651,7 @@ export function OutlookEditor({
                 className="p-1.5 rounded-md transition-colors opacity-50 cursor-not-allowed"
                 title="Not implemented yet"
               >
-                <Image className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
+                <ImageIcon className="w-4 h-4" style={{ color: 'var(--outlook-text-secondary)' }} />
               </button>
             </div>
 

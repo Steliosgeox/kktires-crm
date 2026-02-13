@@ -1,15 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   X,
   Search,
   MapPin,
   Tag,
   Users,
-  Building2,
   Check,
-  ChevronRight,
   Loader2,
 } from 'lucide-react';
 

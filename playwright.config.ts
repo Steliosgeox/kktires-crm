@@ -29,6 +29,12 @@ export default defineConfig({
       NEXTAUTH_URL: 'http://127.0.0.1:3000',
       AUTH_ALLOWED_EMAILS: 'test@example.com',
       DEFAULT_ORG_ID: 'org_kktires',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: '2525',
+      SMTP_SECURE: 'false',
+      SMTP_USER: 'test@example.com',
+      SMTP_PASS: 'test-password',
+      SMTP_FROM: 'test@example.com',
     },
   },
   projects: [

@@ -4,7 +4,7 @@ This is a Next.js App Router CRM with an Outlook-style email/campaign UI. The ba
 
 - **Auth**: NextAuth v5 (Google OAuth)
 - **DB**: Drizzle ORM + SQLite/libSQL (Turso recommended for production)
-- **Email sending**: Gmail API (`gmail.send`) and/or SMTP (for non-Gmail mailboxes like Roundcube)
+- **Email sending**: SMTP only (campaign/direct send path)
 - **Background sending**: **Vercel Cron** + DB-backed job queue (no long-running worker)
 
 ## Local Development
@@ -33,9 +33,8 @@ Set these in Vercel Project Settings:
 - `DATABASE_AUTH_TOKEN` (required for Turso)
 - `NEXTAUTH_URL` (your public URL, e.g. `https://crm.example.com`)
 - `NEXTAUTH_SECRET`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- (Optional, for Roundcube/webmail login + sending) `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (required for email sending)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (optional, only if you use Google OAuth sign-in)
 - `AUTH_ALLOWED_EMAILS` (comma-separated allowlist; non-allowlisted users are denied at sign-in)
 - `EMAIL_TRACKING_SECRET` (signs tracking links/pixels)
 - `OAUTH_TOKEN_ENCRYPTION_KEY` (base64-encoded 32 bytes; encrypts OAuth tokens at rest)
@@ -48,6 +47,7 @@ Campaign sends are enqueued via authenticated endpoints and processed by a cron 
 
 - `vercel.json` config schedules `GET /api/cron/email-jobs` every minute.
 - The processor sends emails in chunks to stay within serverless time limits.
+- In production, set `CRON_SECRET` and make sure cron requests include `Authorization: Bearer <CRON_SECRET>`.
 
 Optional knobs:
 

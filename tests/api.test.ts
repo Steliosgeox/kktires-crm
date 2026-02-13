@@ -18,8 +18,7 @@ const {
   mockCountRecipients,
   mockNormalizeRecipientFilters,
   mockEnqueueCampaignSend,
-  mockGetGmailAccessToken,
-  mockSendGmailEmail,
+  mockSendEmail,
   mockProcessDueEmailJobs,
   mockAuth,
 } = vi.hoisted(() => ({
@@ -27,8 +26,7 @@ const {
   mockCountRecipients: vi.fn(),
   mockNormalizeRecipientFilters: vi.fn(),
   mockEnqueueCampaignSend: vi.fn(),
-  mockGetGmailAccessToken: vi.fn(),
-  mockSendGmailEmail: vi.fn(),
+  mockSendEmail: vi.fn(),
   mockProcessDueEmailJobs: vi.fn(),
   mockAuth: vi.fn(),
 }));
@@ -59,9 +57,8 @@ vi.mock('@/server/email/job-queue', () => ({
   enqueueCampaignSend: mockEnqueueCampaignSend,
 }));
 
-vi.mock('@/server/email/gmail', () => ({
-  getGmailAccessToken: mockGetGmailAccessToken,
-  sendGmailEmail: mockSendGmailEmail,
+vi.mock('@/server/email/transport', () => ({
+  sendEmail: mockSendEmail,
 }));
 
 vi.mock('@/server/email/process-jobs', () => ({
@@ -182,8 +179,11 @@ describe('API routes (DB-backed)', () => {
       jobId: 'job_test_1',
       runAt: new Date().toISOString(),
     });
-    mockGetGmailAccessToken.mockResolvedValue('token_123');
-    mockSendGmailEmail.mockResolvedValue(true);
+    mockSendEmail.mockResolvedValue({
+      ok: true,
+      provider: 'smtp',
+      messageId: '<test-message@example.com>',
+    });
     mockProcessDueEmailJobs.mockResolvedValue({
       processedJobs: 0,
       sent: 0,
@@ -535,6 +535,23 @@ describe('API routes (DB-backed)', () => {
     );
     expect(conflictRes.status).toBe(409);
 
+    mockEnqueueCampaignSend.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      error: 'SMTP is not configured. Missing: SMTP_HOST.',
+      code: 'SMTP_NOT_CONFIGURED',
+    });
+    const smtpRes = await sendRoute.POST(
+      jsonRequest(`http://localhost/api/campaigns/${created.id}/send`, 'POST', {
+        runAt: new Date(Date.now() + 120_000).toISOString(),
+      }),
+      idParams(created.id)
+    );
+    expect(smtpRes.status).toBe(503);
+    const smtpPayload = await smtpRes.json();
+    expect(smtpPayload.code).toBe('SMTP_NOT_CONFIGURED');
+    expect(typeof smtpPayload.requestId).toBe('string');
+
     mockRequireSession.mockResolvedValueOnce(null);
     const unauthRes = await sendRoute.POST(
       jsonRequest(`http://localhost/api/campaigns/${created.id}/send`, 'POST', {
@@ -610,7 +627,7 @@ describe('API routes (DB-backed)', () => {
     expect(segmentUpdateRes.status).toBe(200);
   });
 
-  it('email send route enforces auth and provider state', async () => {
+  it('email send route enforces auth and SMTP transport readiness', async () => {
     const emailRoute = await import('../src/app/api/email/send/route');
 
     mockRequireSession.mockResolvedValueOnce(null);
@@ -623,15 +640,23 @@ describe('API routes (DB-backed)', () => {
     );
     expect(unauthRes.status).toBe(401);
 
-    mockGetGmailAccessToken.mockResolvedValueOnce(null);
-    const noTokenRes = await emailRoute.POST(
+    mockSendEmail.mockResolvedValueOnce({
+      ok: false,
+      provider: 'smtp',
+      errorCode: 'SMTP_NOT_CONFIGURED',
+      errorMessage: 'SMTP is not configured. Missing: SMTP_HOST.',
+    });
+    const notConfiguredRes = await emailRoute.POST(
       jsonRequest('http://localhost/api/email/send', 'POST', {
         to: 'person@example.com',
         subject: 'Test',
         content: '<p>Hello</p>',
       }) as any
     );
-    expect(noTokenRes.status).toBe(403);
+    expect(notConfiguredRes.status).toBe(503);
+    const notConfiguredPayload = await notConfiguredRes.json();
+    expect(notConfiguredPayload.code).toBe('SMTP_NOT_CONFIGURED');
+    expect(typeof notConfiguredPayload.requestId).toBe('string');
 
     const okRes = await emailRoute.POST(
       jsonRequest('http://localhost/api/email/send', 'POST', {
@@ -641,7 +666,7 @@ describe('API routes (DB-backed)', () => {
       }) as any
     );
     expect(okRes.status).toBe(200);
-    expect(mockSendGmailEmail).toHaveBeenCalled();
+    expect(mockSendEmail).toHaveBeenCalled();
 
     const campaignSendRes = await emailRoute.PUT(
       jsonRequest('http://localhost/api/email/send', 'PUT', {
@@ -678,6 +703,10 @@ describe('API routes (DB-backed)', () => {
       const detailed = await detailedRes.json();
       expect(detailed.database).toBe('connected');
       expect(detailed.tables.organizations).toBeGreaterThanOrEqual(1);
+      expect(detailed.emailReadiness.transport.provider).toBe('smtp');
+      expect(typeof detailed.emailReadiness.transport.configured).toBe('boolean');
+      expect(detailed.emailReadiness.queueTables.email_jobs.ok).toBe(true);
+      expect(detailed.emailReadiness.queueTables.email_job_items.ok).toBe(true);
     } finally {
       process.env.HEALTHCHECK_SECRET = prevSecret;
     }
