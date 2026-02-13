@@ -19,6 +19,16 @@ import {
 import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
+}
+
+function isForeignKeyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /foreign key/i.test(message);
+}
+
 const campaignStatusSchema = z.enum([
   'draft',
   'scheduled',
@@ -110,10 +120,18 @@ export async function PUT(
     const recipientFilters =
       body.recipientFilters !== undefined ? normalizeRecipientFilters(body.recipientFilters) : undefined;
 
-    const totalRecipients =
-      recipientFilters !== undefined ? await countRecipients(orgId, recipientFilters) : undefined;
+    let totalRecipients: number | undefined;
+    if (recipientFilters !== undefined) {
+      try {
+        totalRecipients = await countRecipients(orgId, recipientFilters);
+      } catch (error) {
+        // Avoid blocking save due to recipient-count query drift; send path re-validates recipients.
+        console.error(`[campaigns:id:put] requestId=${requestId} recipient count failed`, error);
+        totalRecipients = undefined;
+      }
+    }
 
-    const setValues: Partial<typeof emailCampaigns.$inferInsert> = {
+    const setValues: Record<string, unknown> = {
       updatedAt: new Date(),
     };
 
@@ -137,15 +155,43 @@ export async function PUT(
     if (body.scheduledAt !== undefined) setValues.scheduledAt = scheduledAtDate;
     if (recipientFilters !== undefined) {
       setValues.recipientFilters = recipientFilters;
-      setValues.totalRecipients = totalRecipients;
+      if (totalRecipients !== undefined) setValues.totalRecipients = totalRecipients;
     }
     if (body.signatureId !== undefined) setValues.signatureId = body.signatureId || null;
 
-    const updated = await db
-      .update(emailCampaigns)
-      .set(setValues)
-      .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
-      .returning();
+    const runUpdate = async (values: Record<string, unknown>) =>
+      db
+        .update(emailCampaigns)
+        .set(values as any)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
+        .returning();
+
+    let updated;
+    try {
+      updated = await runUpdate(setValues);
+    } catch (error) {
+      // Legacy DB fallback: retry without newer optional columns that may not exist yet.
+      if (isMissingColumnError(error, 'recipient_filters')) {
+        delete setValues.recipientFilters;
+        delete setValues.totalRecipients;
+      }
+      if (isMissingColumnError(error, 'signature_id')) {
+        delete setValues.signatureId;
+      }
+      if (isForeignKeyError(error)) {
+        setValues.signatureId = null;
+      }
+
+      if (
+        isMissingColumnError(error, 'recipient_filters') ||
+        isMissingColumnError(error, 'signature_id') ||
+        isForeignKeyError(error)
+      ) {
+        updated = await runUpdate(setValues);
+      } else {
+        throw error;
+      }
+    }
 
     if (updated.length === 0) {
       return jsonError('Campaign not found', 404, 'NOT_FOUND', requestId);
