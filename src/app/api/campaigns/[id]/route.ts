@@ -1,49 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
+
 import { db } from '@/lib/db';
 import { emailCampaigns } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
-import { z } from 'zod';
+import {
+  createRequestId,
+  handleApiError,
+  jsonError,
+  withValidatedBody,
+} from '@/server/api/http';
 import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
-const campaignStatusSchema = z.enum(['draft', 'scheduled', 'sending', 'sent', 'paused', 'cancelled', 'failed']);
+const campaignStatusSchema = z.enum([
+  'draft',
+  'scheduled',
+  'sending',
+  'sent',
+  'paused',
+  'cancelled',
+  'failed',
+]);
 
 const campaignUpdateSchema = z.object({
-  name: z.string().min(1).optional(),
-  subject: z.string().optional(),
-  content: z.string().optional(),
+  name: z.string().trim().min(1).max(200).optional(),
+  subject: z.string().trim().max(300).optional(),
+  content: z.string().max(500_000).optional(),
   status: campaignStatusSchema.optional(),
-  scheduledAt: z.string().optional().nullable(),
+  scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: z.unknown().optional(),
-  signatureId: z.string().optional().nullable(),
+  signatureId: z.string().trim().max(64).optional().nullable(),
 });
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
 
     const { id } = await params;
-    
+
     const campaign = await db.query.emailCampaigns.findFirst({
-      where: (c, { eq, and }) => and(
-        eq(c.id, id),
-        eq(c.orgId, orgId)
-      ),
+      where: (c, { eq: whereEq, and: whereAnd }) => whereAnd(whereEq(c.id, id), whereEq(c.orgId, orgId)),
     });
 
     if (!campaign) {
-      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      return jsonError('Campaign not found', 404, 'NOT_FOUND', requestId);
     }
 
-    return NextResponse.json(campaign);
+    return NextResponse.json({ ...campaign, requestId });
   } catch (error) {
-    console.error('Error fetching campaign:', error);
-    return NextResponse.json({ error: 'Failed to fetch campaign' }, { status: 500 });
+    return handleApiError('campaigns:id:get', error, requestId, {
+      message: 'Failed to fetch campaign',
+    });
   }
 }
 
@@ -51,23 +65,15 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
 
     const { id } = await params;
-    const parsed = campaignUpdateSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Invalid payload', details: parsed.error.flatten() },
-        { status: 400 }
-      );
-    }
+    const body = await withValidatedBody(request, campaignUpdateSchema, { maxBytes: 1_000_000 });
 
-    const body = parsed.data;
-
-    // Parse scheduledAt - schema expects Date objects with { mode: 'timestamp' }
     let scheduledAtDate: Date | null = null;
     if (body.scheduledAt) {
       const parsed = new Date(body.scheduledAt);
@@ -92,57 +98,54 @@ export async function PUT(
     if (body.status !== undefined) setValues.status = body.status;
     if (body.scheduledAt !== undefined) setValues.scheduledAt = scheduledAtDate;
     if (recipientFilters !== undefined) {
-      setValues.recipientFilters = recipientFilters as any;
-      setValues.totalRecipients = totalRecipients as any;
+      setValues.recipientFilters = recipientFilters;
+      setValues.totalRecipients = totalRecipients;
     }
     if (body.signatureId !== undefined) setValues.signatureId = body.signatureId || null;
 
     const updated = await db
       .update(emailCampaigns)
-      .set(setValues as any)
-      .where(and(
-        eq(emailCampaigns.id, id),
-        eq(emailCampaigns.orgId, orgId)
-      ))
+      .set(setValues)
+      .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
       .returning();
 
     if (updated.length === 0) {
-      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      return jsonError('Campaign not found', 404, 'NOT_FOUND', requestId);
     }
 
-    return NextResponse.json(updated[0]);
+    return NextResponse.json({ ...updated[0], requestId });
   } catch (error) {
-    console.error('Error updating campaign:', error);
-    return NextResponse.json({ error: 'Failed to update campaign' }, { status: 500 });
+    return handleApiError('campaigns:id:put', error, requestId, {
+      message: 'Failed to update campaign',
+    });
   }
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
 
     const { id } = await params;
-    
+
     const deleted = await db
       .delete(emailCampaigns)
-      .where(and(
-        eq(emailCampaigns.id, id),
-        eq(emailCampaigns.orgId, orgId)
-      ))
+      .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
       .returning();
 
     if (deleted.length === 0) {
-      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      return jsonError('Campaign not found', 404, 'NOT_FOUND', requestId);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, requestId });
   } catch (error) {
-    console.error('Error deleting campaign:', error);
-    return NextResponse.json({ error: 'Failed to delete campaign' }, { status: 500 });
+    return handleApiError('campaigns:id:delete', error, requestId, {
+      message: 'Failed to delete campaign',
+    });
   }
 }

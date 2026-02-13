@@ -1,28 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { tasks, customers } from '@/lib/db/schema';
-import { eq, desc, sql, and, lt } from 'drizzle-orm';
+import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
+
+import { db } from '@/lib/db';
+import { customers, tasks } from '@/lib/db/schema';
+import {
+  createRequestId,
+  handleApiError,
+  parsePagination,
+  withValidatedBody,
+} from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
+const TaskStatusSchema = z.enum(['todo', 'in_progress', 'done']);
+const TaskPrioritySchema = z.enum(['low', 'medium', 'high']);
+
+const TaskCreateSchema = z.object({
+  title: z.string().trim().min(1).max(240),
+  description: z.string().max(10_000).nullable().optional(),
+  customerId: z.string().trim().max(64).nullable().optional(),
+  status: TaskStatusSchema.optional(),
+  priority: TaskPrioritySchema.optional(),
+  dueDate: z.string().datetime().nullable().optional(),
+});
+
 export async function GET(request: NextRequest) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
+        { status: 401 }
+      );
+    }
     const orgId = getOrgIdFromSession(session);
 
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const offset = (page - 1) * limit;
+    const status = (searchParams.get('status') || '').trim();
+    const { page, limit, offset } = parsePagination(searchParams, {
+      defaultPage: 1,
+      defaultLimit: 50,
+      maxLimit: 100,
+    });
 
-    const whereParts: any[] = [eq(tasks.orgId, orgId)];
-    if (status && status !== 'all') {
+    const whereParts: SQL[] = [eq(tasks.orgId, orgId)];
+    if (status && status !== 'all' && TaskStatusSchema.safeParse(status).success) {
       whereParts.push(eq(tasks.status, status));
     }
 
-    // Get all tasks with customer info
     const allTasks = await db
       .select({
         id: tasks.id,
@@ -48,24 +75,29 @@ export async function GET(request: NextRequest) {
       .select({ count: sql<number>`count(*)` })
       .from(tasks)
       .where(and(...whereParts));
-    
+
     const total = countResult[0]?.count || 0;
 
-    // Count by status
-    const todoCount = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(and(eq(tasks.orgId, orgId), eq(tasks.status, 'todo')));
-    const inProgressCount = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(and(eq(tasks.orgId, orgId), eq(tasks.status, 'in_progress')));
-    const doneCount = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(and(eq(tasks.orgId, orgId), eq(tasks.status, 'done')));
-    
-    // Overdue count
-    const overdueCount = await db.select({ count: sql<number>`count(*)` }).from(tasks).where(
-      and(
-        eq(tasks.orgId, orgId),
-        sql`${tasks.status} != 'done'`,
-        lt(tasks.dueDate, new Date())
-      )
-    );
+    const [todoCount, inProgressCount, doneCount, overdueCount] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(tasks)
+        .where(and(eq(tasks.orgId, orgId), eq(tasks.status, 'todo'))),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(tasks)
+        .where(and(eq(tasks.orgId, orgId), eq(tasks.status, 'in_progress'))),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(tasks)
+        .where(and(eq(tasks.orgId, orgId), eq(tasks.status, 'done'))),
+      db.select({ count: sql<number>`count(*)` }).from(tasks).where(
+        and(eq(tasks.orgId, orgId), sql`${tasks.status} != 'done'`, lt(tasks.dueDate, new Date()))
+      ),
+    ]);
 
     return NextResponse.json({
+      requestId,
       tasks: allTasks,
       counts: {
         todo: todoCount[0]?.count || 0,
@@ -81,37 +113,45 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching tasks:', error);
-    return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
+    return handleApiError('tasks:get', error, requestId, { message: 'Failed to fetch tasks' });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
+        { status: 401 }
+      );
+    }
     const orgId = getOrgIdFromSession(session);
 
-    const body = await request.json();
-    
-    const newTask = await db.insert(tasks).values({
-      id: nanoid(),
-      orgId,
-      title: body.title,
-      description: body.description || null,
-      customerId: body.customerId || null,
-      status: body.status || 'todo',
-      priority: body.priority || 'medium',
-      dueDate: body.dueDate ? new Date(body.dueDate) : null,
-      createdBy: session.user.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
+    const body = await withValidatedBody(request, TaskCreateSchema, { maxBytes: 100_000 });
 
-    return NextResponse.json(newTask[0], { status: 201 });
+    const dueDate = body.dueDate ? new Date(body.dueDate) : null;
+
+    const newTask = await db
+      .insert(tasks)
+      .values({
+        id: nanoid(),
+        orgId,
+        title: body.title,
+        description: body.description || null,
+        customerId: body.customerId || null,
+        status: body.status || 'todo',
+        priority: body.priority || 'medium',
+        dueDate,
+        createdBy: session.user.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    return NextResponse.json({ ...newTask[0], requestId }, { status: 201 });
   } catch (error) {
-    console.error('Error creating task:', error);
-    return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
+    return handleApiError('tasks:post', error, requestId, { message: 'Failed to create task' });
   }
 }
-

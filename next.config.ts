@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   // Standalone output is useful for Docker/self-hosting, but not needed on Vercel.
   ...(isVercel ? {} : { output: 'standalone' }),
 
+  // Allow local cross-origin dev requests used by Playwright and local tooling.
+  allowedDevOrigins: ['localhost', '127.0.0.1'],
+
   // Image optimization config
   images: {
     remotePatterns: [

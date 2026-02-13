@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Nodemailer from 'next-auth/providers/nodemailer';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
-import { db } from '@/lib/db';
+import { db, isDatabaseConfigured } from '@/lib/db';
 import { accounts, organizationMembers, organizations, sessions, users, verificationTokens } from '@/lib/db/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -101,7 +101,26 @@ function normalizePossiblySecondsDate(date: unknown): unknown {
   return date;
 }
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+type NextAuthExports = ReturnType<typeof NextAuth>;
+
+function createMissingDatabaseAuthExports(): NextAuthExports {
+  const throwMissingDb = async () => {
+    throw new Error('DATABASE_URL environment variable is required');
+  };
+
+  return {
+    handlers: {
+      GET: throwMissingDb,
+      POST: throwMissingDb,
+    },
+    auth: throwMissingDb,
+    signIn: throwMissingDb,
+    signOut: throwMissingDb,
+  } as unknown as NextAuthExports;
+}
+
+const authExports = isDatabaseConfigured
+  ? NextAuth({
   secret: getAuthSecret(),
   trustHost: getTrustHost(),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -266,4 +285,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     strategy: 'database',
   },
   debug: process.env.NODE_ENV !== 'production' || process.env.AUTH_DEBUG === '1',
-}); 
+})
+  : createMissingDatabaseAuthExports();
+
+export const { handlers, signIn, signOut, auth } = authExports;

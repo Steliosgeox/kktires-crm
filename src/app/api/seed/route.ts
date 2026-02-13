@@ -3,6 +3,7 @@ import { requireSession, hasRole, getOrgIdFromSession } from '@/server/authz';
 import { db } from '@/lib/db';
 import { organizations, customers, tags, customerTags, leads } from '@/lib/db/schema';
 import { nanoid } from 'nanoid';
+import { createRequestId, jsonError } from '@/server/api/http';
 
 // Sample Greek customer data
 const sampleCustomers = [
@@ -191,17 +192,18 @@ const sampleLeads = [
 ];
 
 export async function POST() {
+  const requestId = createRequestId();
   if (process.env.ENABLE_SEED_ENDPOINT !== 'true') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return jsonError('Not found', 404, 'NOT_FOUND', requestId);
   }
 
   try {
     const session = await requireSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     }
     if (!hasRole(session, ['owner', 'admin'])) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return jsonError('Forbidden', 403, 'FORBIDDEN', requestId);
     }
 
     const orgId = getOrgIdFromSession(session);
@@ -321,6 +323,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
+      requestId,
       message: 'Database seeded successfully!',
       counts: {
         customers: sampleCustomers.length,
@@ -329,11 +332,8 @@ export async function POST() {
       },
     });
   } catch (error) {
-    console.error('Error seeding database:', error);
-    return NextResponse.json(
-      { error: 'Failed to seed database', details: String(error) },
-      { status: 500 }
-    );
+    console.error(`[seed] requestId=${requestId}`, error);
+    return jsonError('Failed to seed database', 500, 'INTERNAL_ERROR', requestId);
   }
 }
 

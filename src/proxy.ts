@@ -7,9 +7,20 @@ import { NextRequest, NextResponse } from 'next/server';
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT = 100; // requests per minute
 const RATE_WINDOW = 60 * 1000; // 1 minute
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
+
+function sweepExpiredRateLimitEntries(now: number) {
+  if (rateLimitMap.size < MAX_RATE_LIMIT_ENTRIES) return;
+  for (const [key, value] of rateLimitMap.entries()) {
+    if (value.resetTime <= now) {
+      rateLimitMap.delete(key);
+    }
+  }
+}
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
+  sweepExpiredRateLimitEntries(now);
   const record = rateLimitMap.get(ip);
 
   if (!record || now > record.resetTime) {
@@ -27,6 +38,7 @@ function checkRateLimit(ip: string): boolean {
 
 export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
+  const isOptions = req.method === 'OPTIONS';
 
   const isApiRoute = pathname.startsWith('/api');
   const isAuthRoute = pathname.startsWith('/api/auth');
@@ -44,7 +56,7 @@ export function proxy(req: NextRequest) {
     pathname.startsWith('/manifest') ||
     pathname.startsWith('/icons');
 
-  if (isPublicAsset || isAuthRoute || isHealthRoute || isPublicEmailApi) {
+  if (isPublicAsset || isAuthRoute || isHealthRoute || isPublicEmailApi || isOptions) {
     return NextResponse.next();
   }
 
@@ -68,4 +80,3 @@ export default proxy;
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|icons|manifest.json).*)'],
 };
-

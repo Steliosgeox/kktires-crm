@@ -8,13 +8,14 @@
 UPDATE `sessions`
 SET `expires` = `expires` * 1000
 WHERE `expires` < 1000000000000;
+--> statement-breakpoint
 
 UPDATE `verification_tokens`
 SET `expires` = `expires` * 1000
 WHERE `expires` < 1000000000000;
+--> statement-breakpoint
 
 UPDATE `users`
 SET `emailVerified` = `emailVerified` * 1000
 WHERE `emailVerified` IS NOT NULL
   AND `emailVerified` < 1000000000000;
-

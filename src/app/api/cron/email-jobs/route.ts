@@ -1,25 +1,16 @@
 import { NextResponse } from 'next/server';
 
 import { processDueEmailJobs } from '@/server/email/process-jobs';
+import { createRequestId, jsonError } from '@/server/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return true;
-
-  const auth = request.headers.get('authorization');
-  if (auth === `Bearer ${secret}`) return true;
-
-  // Vercel Cron typically includes this header. Keep it as a convenience, not as strong auth.
-  const vercelCron = request.headers.get('x-vercel-cron');
-  if (vercelCron === '1' || vercelCron === 'true') return true;
-
-  const url = new URL(request.url);
-  if (url.searchParams.get('secret') === secret) return true;
-
-  return false;
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (!secret) return !isProduction;
+  return request.headers.get('authorization') === `Bearer ${secret}`;
 }
 
 function getWorkerId(): string {
@@ -29,8 +20,9 @@ function getWorkerId(): string {
 }
 
 export async function GET(request: Request) {
+  const requestId = createRequestId();
   if (!isAuthorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
   }
 
   try {
@@ -43,10 +35,9 @@ export async function GET(request: Request) {
       maxJobs: Number.isFinite(maxJobs) ? maxJobs : 5,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, requestId });
   } catch (error) {
-    console.error('[cron/email-jobs] error:', error);
-    return NextResponse.json({ error: 'Cron job failed' }, { status: 500 });
+    console.error(`[cron/email-jobs] requestId=${requestId}`, error);
+    return jsonError('Cron job failed', 500, 'INTERNAL_ERROR', requestId);
   }
 }
-

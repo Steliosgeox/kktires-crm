@@ -20,6 +20,8 @@ Useful checks:
 - `npm run lint`
 - `npm run typecheck`
 - `npm test`
+- `npm run baseline:collect` (captures route/test/lint/vulnerability baseline under `test-results/baseline`)
+- `npm run verify:all` (baseline + lint + typecheck + unit + e2e + build + security audit gate)
 
 ## Deploy On Vercel
 
@@ -58,7 +60,7 @@ Optional knobs:
 
 Optional protection:
 
-- `CRON_SECRET`: if set, `/api/cron/email-jobs` requires `Authorization: Bearer <CRON_SECRET>` (or the `x-vercel-cron` header).
+- `CRON_SECRET`: required in production for cron endpoints. Use `Authorization: Bearer <CRON_SECRET>`.
 
 ### Customer Geocoding Backfill (Vercel Cron)
 

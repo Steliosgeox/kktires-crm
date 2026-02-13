@@ -1,29 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, tags, customerTags, customers } from '@/lib/db';
-import { and, eq, count, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { customerTags, customers, db, tags } from '@/lib/db';
+import {
+  createRequestId,
+  handleApiError,
+  jsonError,
+  withValidatedBody,
+} from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
+
+const TagUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  color: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  description: z.string().trim().max(400).nullable().optional(),
+});
 
 // GET /api/tags/:id - Get single tag with customer count
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
-
     const { id } = await params;
-    
+
     const tag = await db.query.tags.findFirst({
       where: and(eq(tags.id, id), eq(tags.orgId, orgId)),
     });
+    if (!tag) return jsonError('Tag not found', 404, 'NOT_FOUND', requestId);
 
-    if (!tag) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
-    }
-
-    // Get customer count
     const [customerCountResult] = await db
       .select({ count: sql<number>`count(DISTINCT ${customers.id})` })
       .from(customerTags)
@@ -31,14 +41,14 @@ export async function GET(
       .where(and(eq(customerTags.tagId, id), eq(customers.orgId, orgId)));
 
     return NextResponse.json({
+      requestId,
       tag: {
         ...tag,
         customerCount: customerCountResult?.count || 0,
       },
     });
   } catch (error) {
-    console.error('Failed to fetch tag:', error);
-    return NextResponse.json({ error: 'Failed to fetch tag' }, { status: 500 });
+    return handleApiError('tags:id:get', error, requestId, { message: 'Failed to fetch tag' });
   }
 }
 
@@ -47,21 +57,18 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
-
     const { id } = await params;
-    const body = await request.json();
+    const body = await withValidatedBody(request, TagUpdateSchema, { maxBytes: 50_000 });
 
     const existing = await db.query.tags.findFirst({
       where: and(eq(tags.id, id), eq(tags.orgId, orgId)),
     });
-
-    if (!existing) {
-      return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
-    }
+    if (!existing) return jsonError('Tag not found', 404, 'NOT_FOUND', requestId);
 
     const [updatedTag] = await db
       .update(tags)
@@ -73,32 +80,29 @@ export async function PUT(
       .where(and(eq(tags.id, id), eq(tags.orgId, orgId)))
       .returning();
 
-    return NextResponse.json({ tag: updatedTag });
+    return NextResponse.json({ requestId, tag: updatedTag });
   } catch (error) {
-    console.error('Failed to update tag:', error);
-    return NextResponse.json({ error: 'Failed to update tag' }, { status: 500 });
+    return handleApiError('tags:id:put', error, requestId, { message: 'Failed to update tag' });
   }
 }
 
 // DELETE /api/tags/:id - Delete tag
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
-
     const { id } = await params;
 
-    // This will also delete related customerTags due to cascade
     await db.delete(tags).where(and(eq(tags.id, id), eq(tags.orgId, orgId)));
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, requestId });
   } catch (error) {
-    console.error('Failed to delete tag:', error);
-    return NextResponse.json({ error: 'Failed to delete tag' }, { status: 500 });
+    return handleApiError('tags:id:delete', error, requestId, {
+      message: 'Failed to delete tag',
+    });
   }
 }
-

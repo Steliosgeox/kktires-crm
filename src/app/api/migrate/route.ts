@@ -4,6 +4,8 @@ import { customers, tags, customerTags, organizations } from '@/lib/db/schema';
 import { getOrgIdFromSession, hasRole, requireSession } from '@/server/authz';
 import { nanoid } from 'nanoid';
 import { and, eq, inArray } from 'drizzle-orm';
+import { createRequestId, jsonError, withValidatedBody } from '@/server/api/http';
+import { z } from 'zod';
 
 // Map Greek category names to our schema
 const categoryMap: Record<string, string> = {
@@ -69,6 +71,11 @@ interface WPFCustomer {
   created_at?: string | number;
 }
 
+const MigrateRequestSchema = z.object({
+  customers: z.array(z.record(z.string(), z.unknown())).max(20_000),
+  clearExisting: z.boolean().optional(),
+});
+
 function normalizeCustomer(raw: WPFCustomer): {
   firstName: string;
   lastName: string | null;
@@ -129,30 +136,27 @@ function normalizeCustomer(raw: WPFCustomer): {
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = createRequestId();
   if (process.env.ENABLE_MIGRATE_ENDPOINT !== 'true') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return jsonError('Not found', 404, 'NOT_FOUND', requestId);
   }
 
   try {
     const session = await requireSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     }
     if (!hasRole(session, ['owner', 'admin'])) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return jsonError('Forbidden', 403, 'FORBIDDEN', requestId);
     }
 
     const orgId = getOrgIdFromSession(session);
 
-    const body = await request.json();
-    const { customers: customersData, clearExisting = false } = body;
-
-    if (!customersData || !Array.isArray(customersData)) {
-      return NextResponse.json(
-        { error: 'Invalid data format. Expected { customers: [...] }' },
-        { status: 400 }
-      );
-    }
+    const body = await withValidatedBody(request, MigrateRequestSchema, {
+      maxBytes: 20_000_000,
+    });
+    const customersData = body.customers as WPFCustomer[];
+    const clearExisting = body.clearExisting ?? false;
 
     console.log(`Starting migration of ${customersData.length} customers...`);
 
@@ -291,6 +295,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      requestId,
       message: `Successfully migrated ${insertedCount} customers`,
       stats: {
         customersImported: insertedCount,
@@ -299,27 +304,25 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Migration error:', error);
-    return NextResponse.json(
-      { error: 'Migration failed', details: String(error) },
-      { status: 500 }
-    );
+    console.error(`[migrate] requestId=${requestId}`, error);
+    return jsonError('Migration failed', 500, 'INTERNAL_ERROR', requestId);
   }
 }
 
 // GET endpoint to check migration status
 export async function GET() {
+  const requestId = createRequestId();
   if (process.env.ENABLE_MIGRATE_ENDPOINT !== 'true') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return jsonError('Not found', 404, 'NOT_FOUND', requestId);
   }
 
   try {
     const session = await requireSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     }
     if (!hasRole(session, ['owner', 'admin'])) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return jsonError('Forbidden', 403, 'FORBIDDEN', requestId);
     }
 
     const orgId = getOrgIdFromSession(session);
@@ -329,6 +332,7 @@ export async function GET() {
     
     return NextResponse.json({
       status: 'ready',
+      requestId,
       currentData: {
         customers: customerCount.length,
         tags: tagCount.length,
@@ -357,6 +361,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+    console.error(`[migrate:get] requestId=${requestId}`, error);
+    return jsonError('Migration status failed', 500, 'INTERNAL_ERROR', requestId);
   }
 }

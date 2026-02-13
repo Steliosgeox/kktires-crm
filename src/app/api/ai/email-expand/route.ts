@@ -1,52 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
 import { auth } from '@/auth';
-import { expandToGreekEmail, CustomerContext } from '@/lib/ai/meltemi';
+import { expandToGreekEmail, type CustomerContext } from '@/lib/ai/meltemi';
+import { createRequestId, handleApiError, withValidatedBody } from '@/server/api/http';
+
+const ExpandRequestSchema = z.object({
+  briefNote: z.string().trim().min(1).max(20_000),
+  customer: z
+    .object({
+      firstName: z.string().trim().max(120).optional(),
+      lastName: z.string().trim().max(120).optional(),
+      company: z.string().trim().max(160).optional(),
+      email: z.string().trim().email().max(254).optional(),
+    })
+    .optional(),
+});
 
 export async function POST(request: NextRequest) {
+  const requestId = createRequestId();
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { briefNote, customer } = body;
-
-    if (!briefNote || briefNote.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Brief note is required' },
-        { status: 400 }
+        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
+        { status: 401 }
       );
     }
 
-    // Use the Meltemi library function
+    const body = await withValidatedBody(request, ExpandRequestSchema, { maxBytes: 100_000 });
     const customerContext: CustomerContext = {
-      firstName: customer?.firstName || 'Πελάτη',
-      lastName: customer?.lastName,
-      company: customer?.company,
-      email: customer?.email,
+      firstName: body.customer?.firstName || 'Customer',
+      lastName: body.customer?.lastName,
+      company: body.customer?.company,
+      email: body.customer?.email,
     };
 
-    const result = await expandToGreekEmail(briefNote, customerContext);
-
+    const result = await expandToGreekEmail(body.briefNote, customerContext);
     if (!result.success) {
       return NextResponse.json({
-        generatedText: briefNote, // Return original on error
+        generatedText: body.briefNote,
         error: result.error,
         source: 'fallback',
+        requestId,
       });
     }
 
     return NextResponse.json({
       generatedText: result.generatedText,
       source: 'meltemi',
+      requestId,
     });
   } catch (error) {
-    console.error('Email expand error:', error);
-    return NextResponse.json(
-      { error: 'Failed to expand email' },
-      { status: 500 }
-    );
+    return handleApiError('ai/email-expand', error, requestId, {
+      message: 'Failed to expand email',
+    });
   }
 }
-

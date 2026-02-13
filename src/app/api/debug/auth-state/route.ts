@@ -1,19 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { eq } from 'drizzle-orm';
+
 import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { sessions } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { hasRole, requireSession } from '@/server/authz';
+import { createRequestId, jsonError } from '@/server/api/http';
 
 function maskToken(token: string): string {
   if (!token) return '';
-  return token.length <= 8 ? `${token}…` : `${token.slice(0, 8)}…`;
+  return token.length <= 8 ? `${token}...` : `${token.slice(0, 8)}...`;
 }
 
 export async function GET(req: NextRequest) {
-  // Intentionally minimal/no secrets. Helps debug “magic link redirects back to /login”.
+  const requestId = createRequestId();
+
   try {
     if (process.env.AUTH_DEBUG !== '1') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return jsonError('Not found', 404, 'NOT_FOUND', requestId);
+    }
+
+    const sessionForAuthz = await requireSession();
+    if (!sessionForAuthz) {
+      return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
+    }
+    if (!hasRole(sessionForAuthz, ['owner', 'admin'])) {
+      return jsonError('Forbidden', 403, 'FORBIDDEN', requestId);
     }
 
     const cookieNames = req.cookies.getAll().map((c) => c.name).sort();
@@ -35,10 +47,9 @@ export async function GET(req: NextRequest) {
     if (sessionCookie) {
       try {
         dbSession = await db.query.sessions.findFirst({
-          where: (s, { eq }) => eq(s.sessionToken, sessionCookie),
+          where: (s, { eq: whereEq }) => whereEq(s.sessionToken, sessionCookie),
         });
       } catch {
-        // If schema differs, fall back to a generic query
         const row = await db
           .select({
             sessionToken: sessions.sessionToken,
@@ -54,6 +65,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      requestId,
       now: new Date().toISOString(),
       host: req.headers.get('host'),
       proto: req.headers.get('x-forwarded-proto') || 'unknown',
@@ -71,12 +83,7 @@ export async function GET(req: NextRequest) {
         : null,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      },
-      { status: 500 }
-    );
+    console.error(`[debug/auth-state] requestId=${requestId}`, error);
+    return jsonError('Failed to inspect auth state', 500, 'INTERNAL_ERROR', requestId);
   }
 }

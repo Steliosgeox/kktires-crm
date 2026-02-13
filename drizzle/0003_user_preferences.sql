@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS "user_preferences" (
   "created_at" INTEGER NOT NULL,
   "updated_at" INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX IF NOT EXISTS "user_preferences_user_org_uidx"
   ON "user_preferences" ("user_id", "org_id");
-

@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -31,20 +34,30 @@ jobs:
       - name: DB Migrate (SQLite)
         run: npm run db:migrate
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit Tests
-        run: npm test
-
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
-      - name: E2E Tests (Playwright)
-        run: npm run test:e2e
+      - name: Verify All
+        run: npm run verify:all
 
-      - name: Build
-        run: npm run build
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-artifacts
+          path: |
+            test-results/**
+            playwright-report/**
+          if-no-files-found: warn
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4

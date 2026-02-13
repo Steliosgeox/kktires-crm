@@ -1,68 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { emailCampaigns } from '@/lib/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
-import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
-const campaignStatusSchema = z.enum(['draft', 'scheduled', 'sending', 'sent', 'paused', 'cancelled', 'failed']);
+import { db } from '@/lib/db';
+import { emailCampaigns } from '@/lib/db/schema';
+import {
+  createRequestId,
+  handleApiError,
+  parsePagination,
+  withValidatedBody,
+} from '@/server/api/http';
+import { getOrgIdFromSession, requireSession } from '@/server/authz';
+import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
+
+const campaignStatusSchema = z.enum([
+  'draft',
+  'scheduled',
+  'sending',
+  'sent',
+  'paused',
+  'cancelled',
+  'failed',
+]);
 
 const campaignCreateSchema = z.object({
-  name: z.string().min(1),
-  subject: z.string().optional(),
-  content: z.string().optional(),
+  name: z.string().trim().min(1).max(200),
+  subject: z.string().trim().max(300).optional(),
+  content: z.string().max(500_000).optional(),
   status: campaignStatusSchema.optional(),
-  scheduledAt: z.string().optional().nullable(),
+  scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: z.unknown().optional(),
-  signatureId: z.string().optional().nullable(),
+  signatureId: z.string().trim().max(64).optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
+        { status: 401 }
+      );
+    }
     const orgId = getOrgIdFromSession(session);
 
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePagination(searchParams, {
+      defaultPage: 1,
+      defaultLimit: 20,
+      maxLimit: 100,
+    });
 
-    // Run all queries in parallel for better performance
     const [allCampaigns, countResult, statsResult] = await Promise.all([
-      // Get campaigns
-      db.select({
-        id: emailCampaigns.id,
-        name: emailCampaigns.name,
-        subject: emailCampaigns.subject,
-        status: emailCampaigns.status,
-        scheduledAt: emailCampaigns.scheduledAt,
-        sentAt: emailCampaigns.sentAt,
-        totalRecipients: emailCampaigns.totalRecipients,
-        sentCount: emailCampaigns.sentCount,
-        openCount: emailCampaigns.openCount,
-        clickCount: emailCampaigns.clickCount,
-        createdAt: emailCampaigns.createdAt,
-      })
+      db
+        .select({
+          id: emailCampaigns.id,
+          name: emailCampaigns.name,
+          subject: emailCampaigns.subject,
+          status: emailCampaigns.status,
+          scheduledAt: emailCampaigns.scheduledAt,
+          sentAt: emailCampaigns.sentAt,
+          totalRecipients: emailCampaigns.totalRecipients,
+          sentCount: emailCampaigns.sentCount,
+          openCount: emailCampaigns.openCount,
+          clickCount: emailCampaigns.clickCount,
+          createdAt: emailCampaigns.createdAt,
+        })
         .from(emailCampaigns)
         .where(eq(emailCampaigns.orgId, orgId))
         .orderBy(desc(emailCampaigns.createdAt))
         .limit(limit)
         .offset(offset),
-
-      // Get total count
-      db.select({ count: sql<number>`count(*)` })
-        .from(emailCampaigns)
-        .where(eq(emailCampaigns.orgId, orgId)),
-
-      // Calculate stats
-      db.select({
-        totalSent: sql<number>`COALESCE(SUM(${emailCampaigns.sentCount}), 0)`,
-        totalOpens: sql<number>`COALESCE(SUM(${emailCampaigns.openCount}), 0)`,
-        totalClicks: sql<number>`COALESCE(SUM(${emailCampaigns.clickCount}), 0)`,
-      })
+      db.select({ count: sql<number>`count(*)` }).from(emailCampaigns).where(eq(emailCampaigns.orgId, orgId)),
+      db
+        .select({
+          totalSent: sql<number>`COALESCE(SUM(${emailCampaigns.sentCount}), 0)`,
+          totalOpens: sql<number>`COALESCE(SUM(${emailCampaigns.openCount}), 0)`,
+          totalClicks: sql<number>`COALESCE(SUM(${emailCampaigns.clickCount}), 0)`,
+        })
         .from(emailCampaigns)
         .where(eq(emailCampaigns.orgId, orgId)),
     ]);
@@ -71,6 +88,7 @@ export async function GET(request: NextRequest) {
     const stats = statsResult[0] || { totalSent: 0, totalOpens: 0, totalClicks: 0 };
 
     return NextResponse.json({
+      requestId,
       campaigns: allCampaigns,
       pagination: {
         page,
@@ -85,30 +103,28 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error fetching campaigns:', error);
-    return NextResponse.json({ error: 'Failed to fetch campaigns' }, { status: 500 });
+    return handleApiError('campaigns:get', error, requestId, {
+      message: 'Failed to fetch campaigns',
+    });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const orgId = getOrgIdFromSession(session);
-
-    const parsed = campaignCreateSchema.safeParse(await request.json());
-    if (!parsed.success) {
+    if (!session) {
       return NextResponse.json(
-        { error: 'Invalid payload', details: parsed.error.flatten() },
-        { status: 400 }
+        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
+        { status: 401 }
       );
     }
+    const orgId = getOrgIdFromSession(session);
 
-    const body = parsed.data;
+    const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 1_000_000 });
     const recipientFilters = normalizeRecipientFilters(body.recipientFilters);
     const totalRecipients = await countRecipients(orgId, recipientFilters);
 
-    // Parse scheduledAt - schema expects Date objects with { mode: 'timestamp' }
     let scheduledAtDate: Date | null = null;
     if (body.scheduledAt) {
       const parsed = new Date(body.scheduledAt);
@@ -117,24 +133,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const newCampaign = await db.insert(emailCampaigns).values({
-      id: `camp_${nanoid()}`,
-      orgId,
-      name: body.name,
-      subject: body.subject || body.name,
-      content: body.content || '',
-      status: body.status || 'draft',
-      scheduledAt: scheduledAtDate,
-      totalRecipients,
-      recipientFilters,
-      signatureId: body.signatureId || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
+    const newCampaign = await db
+      .insert(emailCampaigns)
+      .values({
+        id: `camp_${nanoid()}`,
+        orgId,
+        name: body.name,
+        subject: body.subject || body.name,
+        content: body.content || '',
+        status: body.status || 'draft',
+        scheduledAt: scheduledAtDate,
+        totalRecipients,
+        recipientFilters,
+        signatureId: body.signatureId || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
 
-    return NextResponse.json(newCampaign[0], { status: 201 });
+    return NextResponse.json({ ...newCampaign[0], requestId }, { status: 201 });
   } catch (error) {
-    console.error('Error creating campaign:', error);
-    return NextResponse.json({ error: 'Failed to create campaign' }, { status: 500 });
+    return handleApiError('campaigns:post', error, requestId, {
+      message: 'Failed to create campaign',
+    });
   }
 }

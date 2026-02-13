@@ -1,35 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
+
 import { db } from '@/lib/db';
 import { emailTemplates } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import {
+  createRequestId,
+  handleApiError,
+  jsonError,
+  withValidatedBody,
+} from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
+const TemplateUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  subject: z.string().trim().max(300).optional(),
+  content: z.string().max(500_000).optional(),
+  category: z.string().trim().max(80).nullable().optional(),
+});
+
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
-
     const { id } = await params;
-    
+
     const template = await db.query.emailTemplates.findFirst({
-      where: (t, { eq, and }) => and(
-        eq(t.id, id),
-        eq(t.orgId, orgId)
-      ),
+      where: (t, { eq: whereEq, and: whereAnd }) => whereAnd(whereEq(t.id, id), whereEq(t.orgId, orgId)),
     });
 
-    if (!template) {
-      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(template);
+    if (!template) return jsonError('Template not found', 404, 'NOT_FOUND', requestId);
+    return NextResponse.json({ ...template, requestId });
   } catch (error) {
-    console.error('Error fetching template:', error);
-    return NextResponse.json({ error: 'Failed to fetch template' }, { status: 500 });
+    return handleApiError('templates:id:get', error, requestId, {
+      message: 'Failed to fetch template',
+    });
   }
 }
 
@@ -37,66 +47,57 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await withValidatedBody(request, TemplateUpdateSchema, { maxBytes: 1_000_000 });
 
     const updated = await db
       .update(emailTemplates)
       .set({
-        name: body.name,
-        subject: body.subject,
-        content: body.content,
-        category: body.category,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.subject !== undefined ? { subject: body.subject } : {}),
+        ...(body.content !== undefined ? { content: body.content } : {}),
+        ...(body.category !== undefined ? { category: body.category } : {}),
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(emailTemplates.id, id),
-        eq(emailTemplates.orgId, orgId)
-      ))
+      .where(and(eq(emailTemplates.id, id), eq(emailTemplates.orgId, orgId)))
       .returning();
 
-    if (updated.length === 0) {
-      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(updated[0]);
+    if (updated.length === 0) return jsonError('Template not found', 404, 'NOT_FOUND', requestId);
+    return NextResponse.json({ ...updated[0], requestId });
   } catch (error) {
-    console.error('Error updating template:', error);
-    return NextResponse.json({ error: 'Failed to update template' }, { status: 500 });
+    return handleApiError('templates:id:put', error, requestId, {
+      message: 'Failed to update template',
+    });
   }
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
-
     const { id } = await params;
-    
+
     const deleted = await db
       .delete(emailTemplates)
-      .where(and(
-        eq(emailTemplates.id, id),
-        eq(emailTemplates.orgId, orgId)
-      ))
+      .where(and(eq(emailTemplates.id, id), eq(emailTemplates.orgId, orgId)))
       .returning();
 
-    if (deleted.length === 0) {
-      return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true });
+    if (deleted.length === 0) return jsonError('Template not found', 404, 'NOT_FOUND', requestId);
+    return NextResponse.json({ success: true, requestId });
   } catch (error) {
-    console.error('Error deleting template:', error);
-    return NextResponse.json({ error: 'Failed to delete template' }, { status: 500 });
+    return handleApiError('templates:id:delete', error, requestId, {
+      message: 'Failed to delete template',
+    });
   }
 }

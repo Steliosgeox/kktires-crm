@@ -5,6 +5,7 @@ import { Sparkles, Wand2, ListChecks, Loader2, Bold, Italic, List, Link as LinkI
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassDropdown } from '@/components/ui/glass-dropdown';
 import { toast } from '@/lib/stores/ui-store';
+import { sanitizeHtml } from '@/lib/html-sanitize';
 
 interface RichTextEmailEditorProps {
   value: string;
@@ -40,7 +41,7 @@ export function RichTextEmailEditor({
   // Initialize editor content only once
   useEffect(() => {
     if (editorRef.current && value && !editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = value;
+      editorRef.current.innerHTML = sanitizeHtml(value);
     }
   }, [value]);
 
@@ -101,9 +102,10 @@ export function RichTextEmailEditor({
       if (response.ok) {
         const data = await response.json();
         if (data.generatedText) {
-          onChange(data.generatedText.replace(/\n/g, '<br>'));
+          const sanitized = sanitizeHtml(String(data.generatedText).replace(/\n/g, '<br>'));
+          onChange(sanitized);
           if (editorRef.current) {
-            editorRef.current.innerHTML = data.generatedText.replace(/\n/g, '<br>');
+            editorRef.current.innerHTML = sanitized;
           }
         }
       }
@@ -140,9 +142,10 @@ export function RichTextEmailEditor({
       if (response.ok) {
         const data = await response.json();
         if (data.improved) {
-          onChange(data.improved.replace(/\n/g, '<br>'));
+          const sanitized = sanitizeHtml(String(data.improved).replace(/\n/g, '<br>'));
+          onChange(sanitized);
           if (editorRef.current) {
-            editorRef.current.innerHTML = data.improved.replace(/\n/g, '<br>');
+            editorRef.current.innerHTML = sanitized;
           }
         }
       }

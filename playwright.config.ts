@@ -16,7 +16,7 @@ export default defineConfig({
   },
   globalSetup: './tests/e2e/global-setup.ts',
   webServer: {
-    command: 'npm run dev -- -p 3000',
+    command: 'node ./node_modules/next/dist/bin/next dev -p 3000',
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -38,4 +38,3 @@ export default defineConfig({
     },
   ],
 });
-

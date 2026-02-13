@@ -5,6 +5,7 @@ import { eq, desc, inArray, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 import { z } from 'zod';
+import { createRequestId, jsonError } from '@/server/api/http';
 
 const createAutomationSchema = z.object({
   name: z.string().min(1),
@@ -20,9 +21,10 @@ const createAutomationSchema = z.object({
 });
 
 export async function GET() {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
 
     const automations = await db
@@ -48,29 +50,28 @@ export async function GET() {
     }
 
     return NextResponse.json({
+      requestId,
       automations: automations.map((a) => ({
         ...a,
         steps: stepsByAutomation.get(a.id) || [],
       })),
     });
   } catch (error) {
-    console.error('Error fetching automations:', error);
-    return NextResponse.json({ error: 'Failed to fetch automations' }, { status: 500 });
+    console.error(`[automations:get] requestId=${requestId}`, error);
+    return jsonError('Failed to fetch automations', 500, 'INTERNAL_ERROR', requestId);
   }
 }
 
 export async function POST(request: NextRequest) {
+  const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
 
     const parsed = createAutomationSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Invalid payload', details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return jsonError('Invalid payload', 400, 'BAD_REQUEST', requestId);
     }
 
     const body = parsed.data;
@@ -110,10 +111,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(newAutomation[0], { status: 201 });
+    return NextResponse.json({ ...newAutomation[0], requestId }, { status: 201 });
   } catch (error) {
-    console.error('Error creating automation:', error);
-    return NextResponse.json({ error: 'Failed to create automation' }, { status: 500 });
+    console.error(`[automations:post] requestId=${requestId}`, error);
+    return jsonError('Failed to create automation', 500, 'INTERNAL_ERROR', requestId);
   }
 }
 

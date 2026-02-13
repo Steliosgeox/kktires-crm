@@ -4,24 +4,16 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { customers } from '@/lib/db/schema';
 import { buildAddressString, geocodeAddress } from '@/server/maps/geocode';
+import { clampInt, createRequestId, jsonError } from '@/server/api/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return true;
-
-  const auth = request.headers.get('authorization');
-  if (auth === `Bearer ${secret}`) return true;
-
-  const vercelCron = request.headers.get('x-vercel-cron');
-  if (vercelCron === '1' || vercelCron === 'true') return true;
-
-  const url = new URL(request.url);
-  if (url.searchParams.get('secret') === secret) return true;
-
-  return false;
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (!secret) return !isProduction;
+  return request.headers.get('authorization') === `Bearer ${secret}`;
 }
 
 function hasGeocodeKey(): boolean {
@@ -32,19 +24,21 @@ function hasGeocodeKey(): boolean {
 }
 
 export async function GET(request: Request) {
+  const requestId = createRequestId();
   if (!isAuthorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
   }
   if (!hasGeocodeKey()) {
-    return NextResponse.json(
-      { error: 'GOOGLE_GEOCODING_API_KEY (or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) is required' },
-      { status: 400 }
+    return jsonError(
+      'GOOGLE_GEOCODING_API_KEY (or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) is required',
+      400,
+      'BAD_REQUEST',
+      requestId
     );
   }
 
   const url = new URL(request.url);
-  const limitRaw = url.searchParams.get('limit') || '25';
-  const limit = Math.min(Math.max(Number.parseInt(limitRaw, 10) || 25, 1), 100);
+  const limit = clampInt(url.searchParams.get('limit'), 1, 100, 25);
 
   try {
     const rows = await db
@@ -110,10 +104,10 @@ export async function GET(request: Request) {
       skippedNoAddress,
       failed,
       limit,
+      requestId,
     });
   } catch (error) {
-    console.error('[cron/geocode-customers] error:', error);
-    return NextResponse.json({ error: 'Cron job failed' }, { status: 500 });
+    console.error(`[cron/geocode-customers] requestId=${requestId}`, error);
+    return jsonError('Cron job failed', 500, 'INTERNAL_ERROR', requestId);
   }
 }
-

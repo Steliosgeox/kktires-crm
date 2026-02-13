@@ -29,6 +29,7 @@ import {
   Save,
 } from 'lucide-react';
 import { toast } from '@/lib/stores/ui-store';
+import { sanitizeHtml } from '@/lib/html-sanitize';
 
 interface Template {
   id: string;
@@ -139,7 +140,7 @@ export function OutlookEditor({
     }
 
     // Apply new content only if we're not actively editing.
-    const next = content || '';
+    const next = sanitizeHtml(content || '');
     if (isFocused) return;
     if (lastAppliedRef.current.content === next) return;
 
@@ -165,9 +166,10 @@ export function OutlookEditor({
     setCampaignName(template.name);
     setSubject(template.subject);
     if (template.content) {
-      setContent(template.content);
+      const sanitized = sanitizeHtml(template.content);
+      setContent(sanitized);
       if (editorRef.current) {
-        editorRef.current.innerHTML = template.content;
+        editorRef.current.innerHTML = sanitized;
       }
     }
     setShowTemplates(false);
@@ -202,9 +204,10 @@ export function OutlookEditor({
         if (response.ok) {
           const data = await response.json();
           if (data.generatedText) {
-            setContent(data.generatedText);
+            const sanitized = sanitizeHtml(String(data.generatedText));
+            setContent(sanitized);
             if (editorRef.current) {
-              editorRef.current.innerHTML = data.generatedText;
+              editorRef.current.innerHTML = sanitized;
             }
           }
         }
@@ -217,9 +220,10 @@ export function OutlookEditor({
         if (response.ok) {
           const data = await response.json();
           if (data.improved) {
-            setContent(data.improved);
+            const sanitized = sanitizeHtml(String(data.improved));
+            setContent(sanitized);
             if (editorRef.current) {
-              editorRef.current.innerHTML = data.improved;
+              editorRef.current.innerHTML = sanitized;
             }
           }
         }
@@ -830,7 +834,13 @@ export function OutlookEditor({
                   boxShadow: 'var(--outlook-shadow-md)',
                 }}
               >
-                <div dangerouslySetInnerHTML={{ __html: content || '<p style="color: #999;">Δεν υπάρχει περιεχόμενο...</p>' }} />
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeHtml(
+                      content || '<p style="color: #999;">Δεν υπάρχει περιεχόμενο...</p>'
+                    ),
+                  }}
+                />
               </div>
             ) : (
               <div
