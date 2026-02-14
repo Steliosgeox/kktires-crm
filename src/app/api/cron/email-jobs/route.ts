@@ -7,6 +7,7 @@ import { cleanupOrphanEmailAssets } from '@/server/email/assets';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 function getWorkerId(): string {
   const region = process.env.VERCEL_REGION || 'local';
@@ -21,12 +22,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const timeBudgetMs = Number.parseInt(process.env.EMAIL_CRON_TIME_BUDGET_MS || '8000', 10);
+    const timeBudgetMs = Number.parseInt(process.env.EMAIL_CRON_TIME_BUDGET_MS || '55000', 10);
     const maxJobs = Number.parseInt(process.env.EMAIL_CRON_MAX_JOBS || '5', 10);
 
     const result = await processDueEmailJobs({
       workerId: getWorkerId(),
-      timeBudgetMs: Number.isFinite(timeBudgetMs) ? timeBudgetMs : 8000,
+      timeBudgetMs: Number.isFinite(timeBudgetMs) ? timeBudgetMs : 55000,
       maxJobs: Number.isFinite(maxJobs) ? maxJobs : 5,
     });
 
@@ -34,12 +35,12 @@ export async function GET(request: Request) {
     const cleanup =
       cleanupEnabled
         ? await cleanupOrphanEmailAssets({
-            olderThanHours: Number.parseInt(process.env.EMAIL_ASSET_CLEANUP_HOURS || '24', 10),
-            limit: Number.parseInt(process.env.EMAIL_ASSET_CLEANUP_LIMIT || '200', 10),
-          }).catch((error) => {
-            console.error(`[cron/email-jobs] requestId=${requestId} asset cleanup failed`, error);
-            return { cleaned: 0 };
-          })
+          olderThanHours: Number.parseInt(process.env.EMAIL_ASSET_CLEANUP_HOURS || '24', 10),
+          limit: Number.parseInt(process.env.EMAIL_ASSET_CLEANUP_LIMIT || '200', 10),
+        }).catch((error) => {
+          console.error(`[cron/email-jobs] requestId=${requestId} asset cleanup failed`, error);
+          return { cleaned: 0 };
+        })
         : { cleaned: 0 };
 
     return NextResponse.json({ ...result, cleanup, requestId });
