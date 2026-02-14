@@ -257,14 +257,15 @@ async function finalizeCampaignIfDone(job: EmailJobRow) {
   const total = Number(totalRow?.count || 0);
   const sent = Number(sentRow?.count || 0);
   const failed = Number(failedRow?.count || 0);
-  const status = failed > 0 ? 'failed' : 'sent';
+  // Only mark as 'failed' if NO recipients were successfully sent
+  const status = sent === 0 ? 'failed' : 'sent';
   const now = new Date();
 
   await db
     .update(emailCampaigns)
     .set({
       status,
-      sentAt: status === 'sent' ? now : null,
+      sentAt: now,
       totalRecipients: total,
       sentCount: sent,
       updatedAt: now,
@@ -342,8 +343,8 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
   const signature =
     campaign.signatureId
       ? await db.query.emailSignatures.findFirst({
-          where: (s, { and, eq }) => and(eq(s.id, campaign.signatureId as string), eq(s.orgId, job.orgId)),
-        })
+        where: (s, { and, eq }) => and(eq(s.id, campaign.signatureId as string), eq(s.orgId, job.orgId)),
+      })
       : null;
 
   const campaignAssetBundle = await prepareCampaignAssetBundle({
