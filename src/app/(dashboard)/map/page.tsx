@@ -18,6 +18,8 @@ import {
   Mail,
   X,
   Loader2,
+  AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -53,7 +55,29 @@ interface Stats {
   withoutCoords: number;
 }
 
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+// Error types for better error handling
+type MapErrorType = 'no_api_key' | 'empty_api_key' | 'script_load_failed' | 'initialization_failed' | null;
+
+interface MapError {
+  type: MapErrorType;
+  message: string;
+  details?: string;
+}
+
+// Get the API key and log debugging info (only in development)
+const rawApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const GOOGLE_MAPS_API_KEY = rawApiKey?.trim() || null;
+
+// Debug logging for API key status (sanitized - never log the actual key)
+if (typeof window !== 'undefined') {
+  console.log('[Google Maps] API Key Status:', {
+    defined: rawApiKey !== undefined,
+    hasValue: !!rawApiKey,
+    length: rawApiKey?.length ?? 0,
+    trimmedLength: GOOGLE_MAPS_API_KEY?.length ?? 0,
+    isEmpty: rawApiKey?.trim().length === 0,
+  });
+}
 
 const categoryColors: Record<string, string> = {
   vip: '#f59e0b',
@@ -73,9 +97,10 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState<MapError | null>(null);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerLocation | null>(null);
-  
+
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
@@ -102,30 +127,74 @@ export default function MapPage() {
 
   // Load Google Maps script
   useEffect(() => {
+    // Check if API key is missing or empty
     if (!GOOGLE_MAPS_API_KEY) {
-      console.warn('Google Maps API key not configured');
+      console.warn('[Google Maps] API key not configured');
+      console.log('[Google Maps] Debug info:', {
+        rawKeyDefined: rawApiKey !== undefined,
+        rawKeyLength: rawApiKey?.length ?? 0,
+        trimmedKeyLength: GOOGLE_MAPS_API_KEY?.length ?? 0,
+      });
+
+      // Determine specific error type
+      if (rawApiKey === undefined) {
+        setMapError({
+          type: 'no_api_key',
+          message: 'Google Maps API Key not configured',
+          details: 'The NEXT_PUBLIC_GOOGLE_MAPS_API_KEY environment variable is not set. Please add it in your Vercel project settings.',
+        });
+      } else if (rawApiKey.trim().length === 0) {
+        setMapError({
+          type: 'empty_api_key',
+          message: 'Google Maps API Key is empty',
+          details: 'The NEXT_PUBLIC_GOOGLE_MAPS_API_KEY environment variable is set but contains only whitespace.',
+        });
+      } else {
+        setMapError({
+          type: 'no_api_key',
+          message: 'Google Maps API Key not configured',
+          details: 'The API key was not found. Please check your environment configuration.',
+        });
+      }
       setLoading(false);
       return;
     }
 
+    // Log successful key detection (without revealing the key)
+    console.log('[Google Maps] API key detected, length:', GOOGLE_MAPS_API_KEY.length);
+
     if (window.google?.maps) {
+      console.log('[Google Maps] Google Maps already loaded');
       setMapLoaded(true);
       return;
     }
 
+    console.log('[Google Maps] Loading Google Maps script...');
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
     script.async = true;
     script.defer = true;
-    script.onload = () => setMapLoaded(true);
-    script.onerror = () => {
-      console.error('Failed to load Google Maps');
-      setMapLoaded(false);
+
+    script.onload = () => {
+      console.log('[Google Maps] Script loaded successfully');
+      setMapLoaded(true);
+      setMapError(null);
     };
+
+    script.onerror = (event) => {
+      console.error('[Google Maps] Script failed to load', event);
+      setMapLoaded(false);
+      setMapError({
+        type: 'script_load_failed',
+        message: 'Failed to load Google Maps',
+        details: 'The Google Maps script could not be loaded. This could be due to network issues, an invalid API key, or API key restrictions. Check that your domain is authorized in the Google Cloud Console.',
+      });
+    };
+
     document.head.appendChild(script);
 
     return () => {
-      // Cleanup if needed
+      // Note: We don't remove the script on unmount as it may be used by other components
     };
   }, []);
 
@@ -133,30 +202,52 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapLoaded || !mapRef.current || googleMapRef.current) return;
 
-    const map = new google.maps.Map(mapRef.current, {
-      center: { lat: 39.0742, lng: 21.8243 }, // Center of Greece
-      zoom: 7,
-      styles: [
-        { elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
-        { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1a2e' }] },
-        { elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-        { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#374151' }] },
-        { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
-        { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#374151' }] },
-        { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-        { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
-        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-        { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
-      ],
-      disableDefaultUI: true,
-      zoomControl: false,
-    });
+    try {
+      console.log('[Google Maps] Initializing map...');
+      const map = new google.maps.Map(mapRef.current, {
+        center: { lat: 39.0742, lng: 21.8243 }, // Center of Greece
+        zoom: 7,
+        styles: [
+          { elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
+          { elementType: 'labels.text.stroke', stylers: [{ color: '#1a1a2e' }] },
+          { elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+          { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#374151' }] },
+          { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+          { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+          { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#374151' }] },
+          { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
+          { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#1f2937' }] },
+          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+          { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
+        ],
+        disableDefaultUI: true,
+        zoomControl: false,
+      });
 
-    googleMapRef.current = map;
-    infoWindowRef.current = new google.maps.InfoWindow();
+      googleMapRef.current = map;
+      infoWindowRef.current = new google.maps.InfoWindow();
+      
+      console.log('[Google Maps] Map initialized successfully');
+      
+      // Listen for map errors
+      map.addListener('error', (e: Error) => {
+        console.error('[Google Maps] Map error:', e);
+        setMapError({
+          type: 'initialization_failed',
+          message: 'Google Maps encountered an error',
+          details: e.message || 'The map failed to initialize properly. This could be due to API key restrictions or billing issues.',
+        });
+      });
 
-    fetchLocations();
+      fetchLocations();
+    } catch (error) {
+      console.error('[Google Maps] Failed to initialize map:', error);
+      setMapError({
+        type: 'initialization_failed',
+        message: 'Failed to initialize Google Maps',
+        details: error instanceof Error ? error.message : 'An unexpected error occurred during map initialization.',
+      });
+    }
   }, [mapLoaded, fetchLocations]);
 
   // Update markers when customers change
@@ -169,8 +260,8 @@ export default function MapPage() {
 
     // Add new markers
     customers.forEach(customer => {
-      const color = customer.isVip 
-        ? categoryColors.vip 
+      const color = customer.isVip
+        ? categoryColors.vip
         : categoryColors[customer.category || 'retail'] || categoryColors.retail;
 
       const marker = new google.maps.Marker({
@@ -277,10 +368,10 @@ export default function MapPage() {
   };
 
   const filteredCustomers = searchQuery
-    ? customers.filter(c => 
-        c.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.city?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? customers.filter(c =>
+      c.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.city?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : customers;
 
   return (
@@ -294,8 +385,8 @@ export default function MapPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <GlassButton 
-            variant="default" 
+          <GlassButton
+            variant="default"
             leftIcon={<RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />}
             onClick={() => fetchLocations(selectedCity)}
           >
@@ -312,15 +403,75 @@ export default function MapPage() {
         {/* Map */}
         <GlassCard padding="none" className="relative overflow-hidden min-h-[600px]">
           {/* Map Element */}
-          {GOOGLE_MAPS_API_KEY ? (
-            <div ref={mapRef} className="absolute inset-0" />
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 to-zinc-800 flex flex-col items-center justify-center">
-              <MapIcon className="h-16 w-16 text-white/10 mb-4" />
-              <p className="text-white/40 text-lg">Google Maps</p>
-              <p className="text-white/30 text-sm mt-2">API Key not configured</p>
+          {mapError ? (
+            <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 to-zinc-800 flex flex-col items-center justify-center p-6">
+              <AlertTriangle className="h-16 w-16 text-amber-500/50 mb-4" />
+              <p className="text-white/60 text-lg font-medium text-center">{mapError.message}</p>
+              {mapError.details && (
+                <p className="text-white/40 text-sm mt-2 text-center max-w-md">{mapError.details}</p>
+              )}
+
+              {/* Helpful links based on error type */}
+              <div className="mt-6 flex flex-col gap-3">
+                {mapError.type === 'no_api_key' || mapError.type === 'empty_api_key' ? (
+                  <>
+                    <a
+                      href="https://vercel.com/dashboard"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open Vercel Dashboard to add environment variable
+                    </a>
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Google Cloud Console - API Credentials
+                    </a>
+                  </>
+                ) : mapError.type === 'script_load_failed' ? (
+                  <>
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Check API Key Restrictions in Google Cloud Console
+                    </a>
+                    <a
+                      href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 text-sm transition-colors"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Enable Maps JavaScript API
+                    </a>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Debug info for developers */}
+              <div className="mt-8 p-4 bg-zinc-800/50 rounded-lg max-w-md w-full">
+                <p className="text-white/30 text-xs font-mono mb-2">Debug Info (check browser console for more):</p>
+                <div className="text-white/40 text-xs font-mono space-y-1">
+                  <p>API Key Defined: {rawApiKey !== undefined ? 'Yes' : 'No'}</p>
+                  <p>Raw Key Length: {rawApiKey?.length ?? 0}</p>
+                  <p>Trimmed Key Length: {GOOGLE_MAPS_API_KEY?.length ?? 0}</p>
+                  <p>Error Type: {mapError.type}</p>
+                </div>
+              </div>
             </div>
-          )}
+          ) : GOOGLE_MAPS_API_KEY ? (
+            <div ref={mapRef} className="absolute inset-0" />
+          ) : null}
 
           {/* Loading overlay */}
           {loading && (
@@ -341,8 +492,8 @@ export default function MapPage() {
               />
             </div>
             {selectedCity && (
-              <GlassButton 
-                variant="primary" 
+              <GlassButton
+                variant="primary"
                 size="sm"
                 onClick={() => handleCityFilter(null)}
                 rightIcon={<X className="h-3 w-3" />}
@@ -454,9 +605,9 @@ export default function MapPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-white">Φίλτρο Πόλης</h3>
               {selectedCity && (
-                <GlassButton 
-                  variant="ghost" 
-                  size="sm" 
+                <GlassButton
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleCityFilter(null)}
                 >
                   Καθαρισμός
@@ -475,11 +626,10 @@ export default function MapPage() {
                   <button
                     key={city.name}
                     onClick={() => handleCityFilter(city.name === selectedCity ? null : city.name)}
-                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
-                      city.name === selectedCity
-                        ? 'bg-cyan-500/20 text-cyan-400'
-                        : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
-                    }`}
+                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${city.name === selectedCity
+                      ? 'bg-cyan-500/20 text-cyan-400'
+                      : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                      }`}
                   >
                     <span>{city.name}</span>
                     <GlassBadge size="sm" variant={city.name === selectedCity ? 'primary' : 'default'}>
@@ -496,9 +646,9 @@ export default function MapPage() {
             <GlassCard>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium text-white">Επιλεγμένος Πελάτης</h3>
-                <GlassButton 
-                  variant="ghost" 
-                  size="icon" 
+                <GlassButton
+                  variant="ghost"
+                  size="icon"
                   className="h-6 w-6"
                   onClick={() => setSelectedCustomer(null)}
                 >
