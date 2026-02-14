@@ -18,34 +18,12 @@ import {
 } from '@/server/api/http';
 import { countRecipients, normalizeRecipientFilters } from '@/server/email/recipients';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
-
-/** Extract the full error text including DrizzleQueryError's `.cause`. */
-function getErrorMessages(error: unknown): string {
-  const parts: string[] = [];
-  if (error instanceof Error) {
-    parts.push(error.message);
-    if (error.cause instanceof Error) parts.push(error.cause.message);
-    else if (error.cause) parts.push(String(error.cause));
-  } else {
-    parts.push(String(error ?? ''));
-  }
-  return parts.join(' | ');
-}
-
-function isMissingColumnError(error: unknown, columnName: string): boolean {
-  const message = getErrorMessages(error);
-  return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
-}
-
-function isMissingColumnErrorAny(error: unknown): boolean {
-  const message = getErrorMessages(error);
-  return /no such column/i.test(message);
-}
-
-function isForeignKeyError(error: unknown): boolean {
-  const message = getErrorMessages(error);
-  return /foreign key/i.test(message);
-}
+import {
+  getErrorMessages,
+  healEmailCampaignSchema,
+  isSchemaError,
+  rawUpdateCampaign,
+} from '@/server/db/auto-heal';
 
 const campaignStatusSchema = z.enum([
   'draft',
@@ -183,79 +161,73 @@ export async function PUT(
     }
     if (body.signatureId !== undefined) setValues.signatureId = body.signatureId || null;
 
-    const runUpdate = async (values: Record<string, unknown>) =>
-      db
-        .update(emailCampaigns)
-        .set(values as any)
-        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
-        .returning();
+    // ── UPDATE strategy: Drizzle → heal schema → retry Drizzle → raw fallback ──
 
-    const runUpdateMinimal = async (values: Record<string, unknown>) => {
-      await db
-        .update(emailCampaigns)
-        .set(values as any)
-        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)));
+    const selectCampaignBack = async () => {
       try {
         const row = await db.query.emailCampaigns.findFirst({
           where: (c, { eq: whereEq, and: whereAnd }) => whereAnd(whereEq(c.id, id), whereEq(c.orgId, orgId)),
         });
-        return row ? [row] : [{ id }];
+        return row ? [row] : [];
       } catch {
         return [{ id }];
       }
     };
 
-    const MAX_UPDATE_RETRIES = 4;
     let updated;
     let lastUpdateError: unknown;
-    for (let attempt = 0; attempt < MAX_UPDATE_RETRIES; attempt++) {
-      try {
-        updated = attempt < 3
-          ? await runUpdate(setValues)
-          : await runUpdateMinimal(setValues);
-        break;
-      } catch (error) {
-        lastUpdateError = error;
-        let retryable = false;
 
-        console.error(
-          `[campaigns:id:put] requestId=${requestId} update attempt=${attempt} failed:`,
-          getErrorMessages(error)
-        );
+    // Attempt 1: standard Drizzle update
+    try {
+      updated = await db
+        .update(emailCampaigns)
+        .set(setValues as any)
+        .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
+        .returning();
+    } catch (error) {
+      lastUpdateError = error;
+      const errMsg = getErrorMessages(error);
+      console.error(`[campaigns:id:put] requestId=${requestId} Drizzle update failed:`, errMsg);
 
-        if (isMissingColumnError(error, 'recipient_filters')) {
-          delete setValues.recipientFilters;
-          delete setValues.totalRecipients;
-          retryable = true;
-        }
-        if (isMissingColumnError(error, 'signature_id')) {
-          delete setValues.signatureId;
-          retryable = true;
-        }
-        if (isMissingColumnError(error, 'total_recipients')) {
-          delete setValues.totalRecipients;
-          retryable = true;
-        }
-        if (!retryable && isMissingColumnErrorAny(error)) {
-          delete setValues.recipientFilters;
-          delete setValues.totalRecipients;
-          delete setValues.signatureId;
-          delete setValues.scheduledAt;
-          retryable = true;
-        }
-        if (isForeignKeyError(error)) {
-          setValues.signatureId = null;
-          retryable = true;
-        }
-        if (!retryable && attempt < MAX_UPDATE_RETRIES - 1) {
-          retryable = true;
+      if (isSchemaError(error)) {
+        // Schema drift detected — heal and retry
+        try {
+          const healed = await healEmailCampaignSchema();
+          console.log(`[campaigns:id:put] requestId=${requestId} schema healed:`, healed);
+        } catch (healError) {
+          console.error(`[campaigns:id:put] requestId=${requestId} schema heal failed:`, healError);
         }
 
-        if (!retryable) {
-          throw error;
+        // Attempt 2: retry Drizzle after heal
+        try {
+          updated = await db
+            .update(emailCampaigns)
+            .set(setValues as any)
+            .where(and(eq(emailCampaigns.id, id), eq(emailCampaigns.orgId, orgId)))
+            .returning();
+        } catch (retryError) {
+          lastUpdateError = retryError;
+          console.error(
+            `[campaigns:id:put] requestId=${requestId} Drizzle retry failed:`,
+            getErrorMessages(retryError)
+          );
+
+          // Attempt 3: raw SQL fallback (only uses columns that exist in the DB)
+          try {
+            await rawUpdateCampaign(id, orgId, setValues);
+            updated = await selectCampaignBack();
+            console.log(`[campaigns:id:put] requestId=${requestId} raw SQL update succeeded`);
+          } catch (rawError) {
+            lastUpdateError = rawError;
+            console.error(
+              `[campaigns:id:put] requestId=${requestId} raw SQL update failed:`,
+              getErrorMessages(rawError)
+            );
+          }
         }
       }
     }
+
     if (!updated) {
       throw lastUpdateError;
     }

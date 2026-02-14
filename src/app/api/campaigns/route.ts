@@ -19,6 +19,12 @@ import {
   normalizeCampaignAssetsInput,
   syncCampaignAssets,
 } from '@/server/email/assets';
+import {
+  getErrorMessages,
+  healEmailCampaignSchema,
+  isSchemaError,
+  rawInsertCampaign,
+} from '@/server/db/auto-heal';
 
 const campaignStatusSchema = z.enum([
   'draft',
@@ -57,40 +63,6 @@ const campaignCreateSchema = z.object({
     })
     .optional(),
 });
-
-/** Extract the full error text including DrizzleQueryError's `.cause`. */
-function getErrorMessages(error: unknown): string {
-  const parts: string[] = [];
-  if (error instanceof Error) {
-    parts.push(error.message);
-    // DrizzleQueryError stores the actual DB error in `.cause`
-    if (error.cause instanceof Error) parts.push(error.cause.message);
-    else if (error.cause) parts.push(String(error.cause));
-  } else {
-    parts.push(String(error ?? ''));
-  }
-  return parts.join(' | ');
-}
-
-function isMissingColumnError(error: unknown, columnName: string): boolean {
-  const message = getErrorMessages(error);
-  return /no such column/i.test(message) && message.toLowerCase().includes(columnName.toLowerCase());
-}
-
-function isMissingColumnErrorAny(error: unknown): boolean {
-  const message = getErrorMessages(error);
-  return /no such column/i.test(message);
-}
-
-function isForeignKeyError(error: unknown): boolean {
-  const message = getErrorMessages(error);
-  return /foreign key/i.test(message);
-}
-
-function isMissingTableError(error: unknown): boolean {
-  const message = getErrorMessages(error);
-  return /no such table/i.test(message);
-}
 
 function makeOrgSlug(orgId: string): string {
   const base = orgId
@@ -300,8 +272,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
 
-    const insertCampaign = async (values: Record<string, unknown>) =>
-      db.insert(emailCampaigns).values(values as any).returning();
+    // ── INSERT strategy: Drizzle → heal schema → retry Drizzle → raw fallback ──
 
     const selectCampaignBack = async (cId: string) => {
       try {
@@ -314,90 +285,63 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const MAX_INSERT_RETRIES = 4;
     let newCampaign;
     let lastInsertError: unknown;
-    for (let attempt = 0; attempt < MAX_INSERT_RETRIES; attempt++) {
-      try {
-        if (attempt < 3) {
-          newCampaign = await insertCampaign(campaignValues);
-        } else {
-          // Final fallback: insert without .returning(), then select back.
-          await db.insert(emailCampaigns).values(campaignValues as any);
-          newCampaign = await selectCampaignBack(campaignId);
-        }
-        break;
-      } catch (error) {
-        lastInsertError = error;
-        let retryable = false;
-        const errMsg = getErrorMessages(error);
 
-        console.error(
-          `[campaigns:post] requestId=${requestId} insert attempt=${attempt} failed:`,
-          errMsg
-        );
+    // Attempt 1: standard Drizzle insert
+    try {
+      newCampaign = await db.insert(emailCampaigns).values(campaignValues as any).returning();
+    } catch (error) {
+      lastInsertError = error;
+      const errMsg = getErrorMessages(error);
+      console.error(`[campaigns:post] requestId=${requestId} Drizzle insert failed:`, errMsg);
 
-        // If the row was already inserted (PK collision from a prior attempt whose
-        // .returning() failed), just select it back.
-        if (/unique|primary key|constraint/i.test(errMsg) && /campaign/i.test(errMsg)) {
-          newCampaign = await selectCampaignBack(campaignId);
-          break;
-        }
-        // Also handle SQLITE_CONSTRAINT for primary key
-        if (/UNIQUE constraint failed/i.test(errMsg) || /SQLITE_CONSTRAINT/i.test(errMsg)) {
-          newCampaign = await selectCampaignBack(campaignId);
-          break;
+      // Check for PK collision from a prior attempt
+      if (/UNIQUE constraint failed/i.test(errMsg) || /SQLITE_CONSTRAINT/i.test(errMsg)) {
+        newCampaign = await selectCampaignBack(campaignId);
+      } else if (isSchemaError(error)) {
+        // Schema drift detected — heal and retry
+        try {
+          const healed = await healEmailCampaignSchema();
+          console.log(`[campaigns:post] requestId=${requestId} schema healed:`, healed);
+        } catch (healError) {
+          console.error(`[campaigns:post] requestId=${requestId} schema heal failed:`, healError);
         }
 
-        if (isMissingColumnError(error, 'recipient_filters')) {
-          delete campaignValues.recipientFilters;
-          delete campaignValues.totalRecipients;
-          retryable = true;
-        }
-        if (isMissingColumnError(error, 'signature_id')) {
-          delete campaignValues.signatureId;
-          retryable = true;
-        }
-        if (isMissingColumnError(error, 'total_recipients')) {
-          delete campaignValues.totalRecipients;
-          retryable = true;
-        }
-        // Catch any other missing column by stripping all optional fields and retrying.
-        if (!retryable && isMissingColumnErrorAny(error)) {
-          delete campaignValues.recipientFilters;
-          delete campaignValues.totalRecipients;
-          delete campaignValues.signatureId;
-          delete campaignValues.scheduledAt;
-          delete campaignValues.templateId;
-          retryable = true;
-        }
-        if (isForeignKeyError(error)) {
-          campaignValues.signatureId = null;
-          delete campaignValues.templateId;
-          try {
-            await ensureOrganizationExists(orgId);
-          } catch (ensureError) {
-            console.error(
-              `[campaigns:post] requestId=${requestId} ensureOrganizationExists retry failed`,
-              ensureError
-            );
+        // Attempt 2: retry Drizzle after heal
+        try {
+          newCampaign = await db.insert(emailCampaigns).values(campaignValues as any).returning();
+        } catch (retryError) {
+          lastInsertError = retryError;
+          const retryMsg = getErrorMessages(retryError);
+          console.error(`[campaigns:post] requestId=${requestId} Drizzle retry failed:`, retryMsg);
+
+          if (/UNIQUE constraint failed/i.test(retryMsg) || /SQLITE_CONSTRAINT/i.test(retryMsg)) {
+            newCampaign = await selectCampaignBack(campaignId);
+          } else {
+            // Attempt 3: raw SQL fallback (only uses columns that exist in the DB)
+            try {
+              await rawInsertCampaign(campaignValues);
+              newCampaign = await selectCampaignBack(campaignId);
+              console.log(`[campaigns:post] requestId=${requestId} raw SQL insert succeeded`);
+            } catch (rawError) {
+              lastInsertError = rawError;
+              const rawMsg = getErrorMessages(rawError);
+              console.error(`[campaigns:post] requestId=${requestId} raw SQL insert failed:`, rawMsg);
+
+              if (/UNIQUE constraint failed/i.test(rawMsg) || /SQLITE_CONSTRAINT/i.test(rawMsg)) {
+                newCampaign = await selectCampaignBack(campaignId);
+              }
+            }
           }
-          retryable = true;
-        }
-        // If the .returning() clause fails for unknown reasons,
-        // the final attempt uses insert-without-returning + select-back.
-        if (!retryable && attempt < MAX_INSERT_RETRIES - 1) {
-          retryable = true;
-        }
-
-        if (!retryable) {
-          throw error;
         }
       }
     }
+
     if (!newCampaign || newCampaign.length === 0) {
       throw lastInsertError;
     }
+
     if (normalizedAssets.attachments.length > 0 || normalizedAssets.inlineImages.length > 0) {
       try {
         await syncCampaignAssets({
