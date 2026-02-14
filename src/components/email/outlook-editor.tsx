@@ -352,8 +352,13 @@ export function OutlookEditor({
 
   const handleImageSelected = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    if (!file) {
+      event.target.value = '';
+      return;
+    }
+
+    // Clear value after we have the file
     event.target.value = '';
-    if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       toast.error(
@@ -433,14 +438,19 @@ export function OutlookEditor({
   };
 
   const handleAttachmentSelected = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+    const fileList = event.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    // Convert to array immediately to preserve file references
+    const files = Array.from(fileList);
+
+    // Clear input value to allow re-selecting same file
     event.target.value = '';
-    if (!files || files.length === 0) return;
 
     try {
       setUploadingAttachments(true);
       const next = [...attachments];
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         const asset = await uploadAsset(file, 'file');
         if (!next.some((item) => item.assetId === asset.id)) {
           next.push({

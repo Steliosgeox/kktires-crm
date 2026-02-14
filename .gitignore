@@ -61,3 +61,5 @@ migration-data.json
 # old trash folders
 node_modules_trash*
 node_modules_trash_*
+
+.vercel
