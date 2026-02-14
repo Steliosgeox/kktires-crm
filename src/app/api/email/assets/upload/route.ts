@@ -22,17 +22,27 @@ function parseOptionalInt(raw: FormDataEntryValue | null): number | null {
 
 export async function POST(request: Request) {
   const requestId = createRequestId();
+  console.log(`[Upload] Starting upload request ${requestId}`);
+
   try {
     const session = await requireSession();
-    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
+    if (!session) {
+      console.log(`[Upload] Unauthorized ${requestId}`);
+      return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
+    }
 
     const orgId = getOrgIdFromSession(session);
+    console.log(`[Upload] Authorized user ${session.user.id} in org ${orgId}`);
+
     const formData = await request.formData();
     const fileValue = formData.get('file');
 
     if (!(fileValue instanceof File)) {
+      console.log(`[Upload] No file found in form data`);
       return jsonError('File is required', 400, 'BAD_REQUEST', requestId);
     }
+
+    console.log(`[Upload] File received: name=${fileValue.name}, size=${fileValue.size}, type=${fileValue.type}`);
 
     if (fileValue.size <= 0) {
       return jsonError('Empty file', 400, 'BAD_REQUEST', requestId);
@@ -46,6 +56,8 @@ export async function POST(request: Request) {
     const arrayBuffer = await fileValue.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    console.log(`[Upload] Calling createEmailAsset for ${fileValue.name} (${kind})`);
+
     const asset = await createEmailAsset({
       orgId,
       uploaderUserId: session.user.id,
@@ -57,8 +69,11 @@ export async function POST(request: Request) {
       kind,
     });
 
+    console.log(`[Upload] Asset created successfully: ${asset.id}`);
+
     return NextResponse.json({ asset, requestId }, { status: 201 });
   } catch (error) {
+    console.error(`[Upload] Error in upload request ${requestId}:`, error);
     return handleApiError('email-assets:upload', error, requestId, {
       message: 'Failed to upload asset',
     });
