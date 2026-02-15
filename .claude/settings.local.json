@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npx tsc --noEmit --pretty)",
       "Bash(npx tsc:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dir \"C:\\\\Users\\\\Stelios\\\\kktires-web\\\\drizzle\")"
     ]
   }
 }

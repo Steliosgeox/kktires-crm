@@ -108,14 +108,14 @@ export const verificationTokens = sqliteTable('verification_tokens', {
 export const customers = sqliteTable('customers', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  
+
   // Basic Info
   firstName: text('first_name').notNull(),
   lastName: text('last_name'),
   company: text('company'),
   title: text('title'),
   avatar: text('avatar'),
-  
+
   // Contact Info
   email: text('email'),
   emailSecondary: text('email_secondary'),
@@ -124,49 +124,49 @@ export const customers = sqliteTable('customers', {
   mobile: text('mobile'),
   fax: text('fax'),
   website: text('website'),
-  
+
   // Address
   street: text('street'),
   city: text('city'),
   state: text('state'),
   postalCode: text('postal_code'),
   country: text('country').default('Ελλάδα'),
-  
+
   // Greek Business Fields
   afm: text('afm'), // ΑΦΜ - Tax ID
   doy: text('doy'), // ΔΟΥ - Tax Office
   gemh: text('gemh'), // ΓΕΜΗ - Business Registry
   activityCode: text('activity_code'), // Κωδικός Δραστηριότητας (KAD)
   legalForm: text('legal_form'), // ΑΕ, ΕΠΕ, ΙΚΕ, etc.
-  
+
   // Classification
   category: text('category').default('retail'), // retail, wholesale, fleet, garage, vip, premium, standard, basic
   lifecycleStage: text('lifecycle_stage').default('customer'), // lead, prospect, customer, churned
   leadSource: text('lead_source'), // website, referral, import, manual
   leadScore: integer('lead_score').default(0),
-  
+
   // Financial
   revenue: real('revenue').default(0),
   currency: text('currency').default('EUR'),
   paymentTerms: text('payment_terms'),
   creditLimit: real('credit_limit'),
-  
+
   // Dates
   birthday: text('birthday'), // YYYY-MM-DD format
   lastContactDate: integer('last_contact_date', { mode: 'timestamp' }),
   nextFollowUpDate: integer('next_follow_up_date', { mode: 'timestamp' }),
-  
+
   // Location
   latitude: real('latitude'),
   longitude: real('longitude'),
   geocodedAt: integer('geocoded_at', { mode: 'timestamp' }),
-  
+
   // Metadata
   notes: text('notes'),
   isVip: integer('is_vip', { mode: 'boolean' }).default(false),
   isActive: integer('is_active', { mode: 'boolean' }).default(true),
   unsubscribed: integer('unsubscribed', { mode: 'boolean' }).default(false),
-  
+
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   createdBy: text('created_by').references(() => users.id),
@@ -272,26 +272,26 @@ export const customerCustomValues = sqliteTable('customer_custom_values', {
 export const leads = sqliteTable('leads', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  
+
   // Basic Info
   firstName: text('first_name').notNull(),
   lastName: text('last_name'),
   company: text('company'),
   email: text('email'),
   phone: text('phone'),
-  
+
   // Lead Info
   source: text('source').notNull(), // website, referral, import, manual
   status: text('status').notNull().default('new'), // new, contacted, qualified, proposal, won, lost
   score: integer('score').default(0),
-  
+
   // Assignment
   assignedTo: text('assigned_to').references(() => users.id),
-  
+
   // Conversion
   convertedToCustomerId: text('converted_to_customer_id').references(() => customers.id),
   convertedAt: integer('converted_at', { mode: 'timestamp' }),
-  
+
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -349,7 +349,7 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   templateId: text('template_id').references(() => emailTemplates.id),
   signatureId: text('signature_id').references(() => emailSignatures.id),
   status: text('status').notNull().default('draft'), // draft, scheduled, sending, sent, paused, cancelled
-  
+
   // Sending
   fromEmail: text('from_email'),
   gmailCredentialId: text('gmail_credential_id').references(() => gmailCredentials.id),
@@ -361,7 +361,7 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   }>(),
   scheduledAt: integer('scheduled_at', { mode: 'timestamp' }),
   sentAt: integer('sent_at', { mode: 'timestamp' }),
-  
+
   // Stats
   totalRecipients: integer('total_recipients').default(0),
   sentCount: integer('sent_count').default(0),
@@ -369,7 +369,7 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   clickCount: integer('click_count').default(0),
   bounceCount: integer('bounce_count').default(0),
   unsubscribeCount: integer('unsubscribe_count').default(0),
-  
+
   createdBy: text('created_by').references(() => users.id),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
@@ -428,8 +428,22 @@ export const campaignRecipients = sqliteTable('campaign_recipients', {
   status: text('status').notNull().default('pending'), // pending, sent, failed, bounced
   sentAt: integer('sent_at', { mode: 'timestamp' }),
   errorMessage: text('error_message'),
+
+  // Enhanced tracking fields (added in migration 0007)
+  failureCategory: text('failure_category'), // syntax, dns, bounce, complaint
+  failureReasonDetailed: text('failure_reason_detailed'), // invalid_syntax, dns_failure, hard_bounce, etc.
+  bounceType: text('bounce_type'), // hard, soft
+  attemptCount: integer('attempt_count').default(0),
+  lastAttemptAt: integer('last_attempt_at', { mode: 'timestamp' }),
+  nextRetryAt: integer('next_retry_at', { mode: 'timestamp' }),
+  mxValid: integer('mx_valid', { mode: 'boolean' }),
+  dnsCheckedAt: integer('dns_checked_at', { mode: 'timestamp' }),
+  emailNormalized: text('email_normalized'),
+  domain: text('domain'),
 }, (table) => ({
   campaignIdx: index('recipients_campaign_idx').on(table.campaignId),
+  campaignStatusIdx: index('idx_recipients_campaign_status').on(table.campaignId, table.status),
+  statusRetryIdx: index('idx_recipients_status_retry').on(table.status, table.nextRetryAt),
 }));
 
 // ============================================
@@ -494,6 +508,130 @@ export const emailTracking = sqliteTable('email_tracking', {
 }, (table) => ({
   campaignTypeIdx: index('tracking_campaign_type_idx').on(table.campaignId, table.type),
 }));
+
+// ============================================
+// EMAIL MARKETING: DELIVERY EVENTS (New in migration 0007)
+// ============================================
+
+export const emailDeliveryEvents = sqliteTable('email_delivery_events', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  campaignId: text('campaign_id').notNull().references(() => emailCampaigns.id, { onDelete: 'cascade' }),
+  recipientId: text('recipient_id').notNull().references(() => campaignRecipients.id, { onDelete: 'cascade' }),
+
+  // Event Classification
+  eventType: text('event_type').notNull(), // sent, delivered, bounce, complaint, unsubscribe, deferred
+  eventCategory: text('event_category').notNull(), // success, failure, complaint, optout
+  failureReason: text('failure_reason'), // invalid_syntax, dns_failure, hard_bounce, soft_bounce, etc.
+
+  // Event Details
+  smtpCode: integer('smtp_code'),
+  smtpMessage: text('smtp_message'),
+  diagnosticCode: text('diagnostic_code'),
+  bounceType: text('bounce_type'), // hard, soft
+  bounceSubtype: text('bounce_subtype'),
+
+  // Retry Information
+  attemptNumber: integer('attempt_number').default(1),
+  nextRetryAt: integer('next_retry_at', { mode: 'timestamp' }),
+  retryEligible: integer('retry_eligible', { mode: 'boolean' }).default(false),
+
+  // Metadata
+  emailAddress: text('email_address').notNull(),
+  domain: text('domain'),
+  mxValid: integer('mx_valid', { mode: 'boolean' }),
+  dnsCheckedAt: integer('dns_checked_at', { mode: 'timestamp' }),
+
+  // Timestamps
+  occurredAt: integer('occurred_at', { mode: 'timestamp' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  campaignIdx: index('idx_delivery_events_campaign').on(table.campaignId),
+  recipientIdx: index('idx_delivery_events_recipient').on(table.recipientId),
+  typeIdx: index('idx_delivery_events_type').on(table.eventType),
+  failureIdx: index('idx_delivery_events_failure_reason').on(table.failureReason),
+  domainIdx: index('idx_delivery_events_domain').on(table.domain),
+  occurredIdx: index('idx_delivery_events_occurred_at').on(table.occurredAt),
+}));
+
+// ============================================
+// EMAIL MARKETING: SUPPRESSIONS (New in migration 0007)
+// ============================================
+
+export const emailSuppressions = sqliteTable('email_suppressions', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+
+  // Suppression Type
+  suppressionType: text('suppression_type').notNull(), // hard_bounce, complaint, unsubscribe, manual
+  suppressionReason: text('suppression_reason'),
+
+  // Source Information
+  sourceCampaignId: text('source_campaign_id').references(() => emailCampaigns.id, { onDelete: 'set null' }),
+  sourceEventId: text('source_event_id'),
+
+  // Metadata
+  bounceCount: integer('bounce_count').default(0),
+  complaintCount: integer('complaint_count').default(0),
+
+  // Timestamps
+  suppressedAt: integer('suppressed_at', { mode: 'timestamp' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+}, (table) => ({
+  orgEmailIdx: uniqueIndex('idx_suppressions_org_email').on(table.orgId, table.email),
+  typeIdx: index('idx_suppressions_type').on(table.suppressionType),
+  expiresIdx: index('idx_suppressions_expires').on(table.expiresAt),
+}));
+
+// ============================================
+// EMAIL MARKETING: VALIDATION CACHE (New in migration 0007)
+// ============================================
+
+export const emailValidationCache = sqliteTable('email_validation_cache', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  domain: text('domain').notNull(),
+
+  // Validation Results
+  syntaxValid: integer('syntax_valid', { mode: 'boolean' }).notNull(),
+  mxValid: integer('mx_valid', { mode: 'boolean' }),
+  mxRecords: text('mx_records', { mode: 'json' }).$type<string[]>(),
+  smtpValid: integer('smtp_valid', { mode: 'boolean' }),
+
+  // Metadata
+  validationSource: text('validation_source'), // pre_send, dns_check, smtp_verify
+  errorMessage: text('error_message'),
+
+  // Timestamps
+  validatedAt: integer('validated_at', { mode: 'timestamp' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+
+  // Statistics
+  checkCount: integer('check_count').default(1),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  domainIdx: index('idx_validation_cache_domain').on(table.domain),
+  expiresIdx: index('idx_validation_cache_expires').on(table.expiresAt),
+}));
+
+// ============================================
+// EMAIL MARKETING: RETRY CONFIG (New in migration 0007)
+// ============================================
+
+export const emailRetryConfig = sqliteTable('email_retry_config', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
+
+  failureReason: text('failure_reason').notNull(),
+  maxRetries: integer('max_retries').notNull().default(3),
+  initialDelaySeconds: integer('initial_delay_seconds').notNull().default(300),
+  backoffMultiplier: real('backoff_multiplier').notNull().default(2.0),
+  maxDelaySeconds: integer('max_delay_seconds').notNull().default(86400),
+
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+});
 
 // ============================================
 // EMAIL MARKETING: SIGNATURES
@@ -791,3 +929,13 @@ export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
+export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
+export type NewCampaignRecipient = typeof campaignRecipients.$inferInsert;
+export type EmailDeliveryEvent = typeof emailDeliveryEvents.$inferSelect;
+export type NewEmailDeliveryEvent = typeof emailDeliveryEvents.$inferInsert;
+export type EmailSuppression = typeof emailSuppressions.$inferSelect;
+export type NewEmailSuppression = typeof emailSuppressions.$inferInsert;
+export type EmailValidationCache = typeof emailValidationCache.$inferSelect;
+export type NewEmailValidationCache = typeof emailValidationCache.$inferInsert;
+export type EmailRetryConfig = typeof emailRetryConfig.$inferSelect;
+export type NewEmailRetryConfig = typeof emailRetryConfig.$inferInsert;
