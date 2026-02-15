@@ -105,6 +105,8 @@ export default function MapPage() {
   const googleMapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  // Performance optimization: Track previous customer IDs for marker diffing
+  const prevCustomerIdsRef = useRef<Set<string>>(new Set());
 
   // Fetch customer locations
   const fetchLocations = useCallback(async (city?: string | null) => {
@@ -226,9 +228,9 @@ export default function MapPage() {
 
       googleMapRef.current = map;
       infoWindowRef.current = new google.maps.InfoWindow();
-      
+
       console.log('[Google Maps] Map initialized successfully');
-      
+
       // Listen for map errors
       map.addListener('error', (e: Error) => {
         console.error('[Google Maps] Map error:', e);
@@ -250,16 +252,30 @@ export default function MapPage() {
     }
   }, [mapLoaded, fetchLocations]);
 
-  // Update markers when customers change
+  // Update markers when customers change - with diffing for performance
+  // Only adds/removes markers that have changed, avoiding unnecessary DOM thrashing
   useEffect(() => {
     if (!googleMapRef.current || !mapLoaded) return;
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.setMap(null));
-    markersRef.current = [];
+    const currentCustomerIds = new Set(customers.map(c => c.id));
+    const prevCustomerIds = prevCustomerIdsRef.current;
 
-    // Add new markers
-    customers.forEach(customer => {
+    // Find markers to remove (customers no longer in list)
+    const markersToRemove = markersRef.current.filter(
+      marker => !currentCustomerIds.has(marker.get('customerId'))
+    );
+    markersToRemove.forEach(marker => marker.setMap(null));
+
+    // Find new customers to add (not in previous list)
+    const newCustomers = customers.filter(c => !prevCustomerIds.has(c.id));
+
+    // Update markersRef to only include remaining markers
+    markersRef.current = markersRef.current.filter(
+      marker => currentCustomerIds.has(marker.get('customerId'))
+    );
+
+    // Add only new markers
+    newCustomers.forEach(customer => {
       const color = customer.isVip
         ? categoryColors.vip
         : categoryColors[customer.category || 'retail'] || categoryColors.retail;
@@ -278,6 +294,9 @@ export default function MapPage() {
         },
       });
 
+      // Store customer ID on marker for diffing
+      marker.set('customerId', customer.id);
+
       marker.addListener('click', () => {
         setSelectedCustomer(customer);
         if (infoWindowRef.current && googleMapRef.current) {
@@ -295,8 +314,12 @@ export default function MapPage() {
       markersRef.current.push(marker);
     });
 
-    // Fit bounds if we have markers
-    if (customers.length > 0 && googleMapRef.current) {
+    // Update ref for next comparison
+    prevCustomerIdsRef.current = currentCustomerIds;
+
+    // Fit bounds only when markers change significantly (first load or filter change)
+    // Check if the number of markers changed substantially to avoid constant re-centering
+    if (customers.length > 0 && googleMapRef.current && Math.abs(markersRef.current.length - customers.length) === 0 && prevCustomerIds.size === 0) {
       const bounds = new google.maps.LatLngBounds();
       customers.forEach(c => bounds.extend({ lat: c.latitude, lng: c.longitude }));
       googleMapRef.current.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });

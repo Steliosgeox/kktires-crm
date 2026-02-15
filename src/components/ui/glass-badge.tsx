@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface GlassBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
@@ -8,7 +9,9 @@ export interface GlassBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   dot?: boolean;
 }
 
-export function GlassBadge({
+// Performance optimization: Wrapped with React.memo to prevent unnecessary re-renders
+// when parent components update but this component's props haven't changed
+export const GlassBadge = memo(function GlassBadge({
   className,
   variant = 'default',
   size = 'md',
@@ -58,5 +61,5 @@ export function GlassBadge({
       {children}
     </span>
   );
-}
+});
 

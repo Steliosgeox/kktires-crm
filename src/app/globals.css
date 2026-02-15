@@ -10,20 +10,24 @@
   /* Base Colors - Lighter dark theme */
   --background: #14151a;
   --foreground: #f4f4f8;
-  
+
   /* Aurora Gradient Colors */
-  --aurora-1: #0ea5e9; /* Cyan */
-  --aurora-2: #8b5cf6; /* Purple */
-  --aurora-3: #ec4899; /* Pink */
-  --aurora-4: #10b981; /* Emerald */
-  
+  --aurora-1: #0ea5e9;
+  /* Cyan */
+  --aurora-2: #8b5cf6;
+  /* Purple */
+  --aurora-3: #ec4899;
+  /* Pink */
+  --aurora-4: #10b981;
+  /* Emerald */
+
   /* Glass Effect Variables - More visible */
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-bg-hover: rgba(255, 255, 255, 0.08);
   --glass-border: rgba(255, 255, 255, 0.12);
   --glass-border-hover: rgba(255, 255, 255, 0.20);
   --glass-blur: 16px;
-  
+
   /* Accent Colors */
   --accent-primary: #0ea5e9;
   --accent-primary-hover: #38bdf8;
@@ -31,23 +35,23 @@
   --accent-success: #10b981;
   --accent-warning: #f59e0b;
   --accent-error: #ef4444;
-  
+
   /* Text Colors - Better contrast */
   --text-primary: #f4f4f8;
   --text-secondary: #b4b4c0;
   --text-muted: #7a7a88;
-  
+
   /* Glow Effects */
   --glow-primary: 0 0 20px rgba(14, 165, 233, 0.25);
   --glow-secondary: 0 0 20px rgba(139, 92, 246, 0.25);
   --glow-success: 0 0 20px rgba(16, 185, 129, 0.25);
   --glow-error: 0 0 20px rgba(239, 68, 68, 0.25);
-  
+
   /* Shadows for depth */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
-  
+
   /* Border radius - More refined */
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -62,18 +66,18 @@
 .light {
   --background: #f5f7fa;
   --foreground: #1a1d24;
-  
+
   /* Glass Effect Variables - Light Mode */
   --glass-bg: rgba(255, 255, 255, 0.8);
   --glass-bg-hover: rgba(255, 255, 255, 0.9);
   --glass-border: rgba(0, 0, 0, 0.1);
   --glass-border-hover: rgba(0, 0, 0, 0.18);
-  
+
   /* Text Colors - Light Mode */
   --text-primary: #1a1d24;
   --text-secondary: #52586a;
   --text-muted: #8b92a5;
-  
+
   /* Shadows for light mode */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -258,26 +262,32 @@ body {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: 
+  background:
     radial-gradient(ellipse at 20% 20%, var(--aurora-1) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 20%, var(--aurora-2) 0%, transparent 50%),
     radial-gradient(ellipse at 40% 80%, var(--aurora-3) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 80%, var(--aurora-4) 0%, transparent 50%);
   opacity: 0.08;
   animation: aurora-drift 25s ease-in-out infinite;
-  filter: blur(80px);
+  /* Reduced from 80px to 40px for lower GPU strain */
+  filter: blur(40px);
 }
 
 @keyframes aurora-drift {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translate(0, 0) rotate(0deg);
   }
+
   25% {
     transform: translate(3%, 3%) rotate(2deg);
   }
+
   50% {
     transform: translate(-3%, 6%) rotate(-2deg);
   }
+
   75% {
     transform: translate(-6%, -3%) rotate(1deg);
   }
@@ -478,8 +488,13 @@ body {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-up {
@@ -487,6 +502,7 @@ body {
     opacity: 0;
     transform: translateY(16px) scale(0.97);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -654,6 +670,7 @@ body {
     opacity: 0;
     transform: translateX(80px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -665,6 +682,7 @@ body {
     opacity: 1;
     transform: translateX(0);
   }
+
   to {
     opacity: 0;
     transform: translateX(80px);
@@ -676,12 +694,10 @@ body {
    ============================================ */
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--glass-bg) 25%,
-    var(--glass-bg-hover) 50%,
-    var(--glass-bg) 75%
-  );
+  background: linear-gradient(90deg,
+      var(--glass-bg) 25%,
+      var(--glass-bg-hover) 50%,
+      var(--glass-bg) 75%);
   background-size: 200% 100%;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
   border-radius: var(--radius-sm);
@@ -691,6 +707,7 @@ body {
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }
@@ -728,10 +745,29 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.7;
+  }
+}
+
+/* ============================================
+   REDUCED MOTION SUPPORT
+   Accessibility: Disable animations for users 
+   who prefer reduced motion
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .aurora-background,
+  .aurora-background::before,
+  .animate-pulse-slow,
+  .skeleton {
+    animation: none !important;
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, memo } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
@@ -13,7 +13,9 @@ export interface GlassButtonProps
   rightIcon?: React.ReactNode;
 }
 
-const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
+// Performance optimization: Wrapped with React.memo to prevent unnecessary re-renders
+// when parent components update but this component's props haven't changed
+const GlassButton = memo(forwardRef<HTMLButtonElement, GlassButtonProps>(
   (
     {
       className,
@@ -70,7 +72,7 @@ const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
       </button>
     );
   }
-);
+));
 
 GlassButton.displayName = 'GlassButton';
 

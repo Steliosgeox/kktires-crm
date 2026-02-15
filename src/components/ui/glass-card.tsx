@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, memo } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -10,7 +10,9 @@ export interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   glow?: 'none' | 'primary' | 'secondary' | 'success' | 'error';
 }
 
-const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
+// Performance optimization: Wrapped with React.memo to prevent unnecessary re-renders
+// when parent components update but this component's props haven't changed
+const GlassCard = memo(forwardRef<HTMLDivElement, GlassCardProps>(
   (
     {
       className,
@@ -53,7 +55,7 @@ const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
       </div>
     );
   }
-);
+));
 
 GlassCard.displayName = 'GlassCard';
 
