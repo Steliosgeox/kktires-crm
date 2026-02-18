@@ -1,22 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-
 /**
  * Single-layer aurora background.
- * The animation itself lives in CSS ::before for lower repaint cost.
+ * Kept static to avoid continuous GPU compositing in glass-heavy screens.
  */
 export function AuroraBackground() {
-  const [isVisible, setIsVisible] = useState(true);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsVisible(!document.hidden);
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
-
-  return <div className="aurora-background" aria-hidden="true" data-visible={isVisible} />;
+  return <div className="aurora-background" aria-hidden="true" />;
 }
+
