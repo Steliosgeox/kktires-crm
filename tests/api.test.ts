@@ -315,6 +315,39 @@ describe('API routes (DB-backed)', () => {
     expect(bad.code).toBe('BAD_REQUEST');
   });
 
+  it('POST /api/customers defaults and normalizes category to wholesale pipeline', async () => {
+    const route = await import('../src/app/api/customers/route');
+
+    const defaultCategoryRes = await route.POST(
+      jsonRequest('http://localhost/api/customers', 'POST', {
+        firstName: 'Category Default',
+      }) as any
+    );
+    expect(defaultCategoryRes.status).toBe(201);
+    const createdDefault = await defaultCategoryRes.json();
+    expect(createdDefault.category).toBe('wholesale');
+
+    const normalizedCategoryRes = await route.POST(
+      jsonRequest('http://localhost/api/customers', 'POST', {
+        firstName: 'Category Normalized',
+        category: 'Χονδρική',
+      }) as any
+    );
+    expect(normalizedCategoryRes.status).toBe(201);
+    const createdNormalized = await normalizedCategoryRes.json();
+    expect(createdNormalized.category).toBe('wholesale');
+
+    const explicitCategoryRes = await route.POST(
+      jsonRequest('http://localhost/api/customers', 'POST', {
+        firstName: 'Category Explicit',
+        category: 'vip',
+      }) as any
+    );
+    expect(explicitCategoryRes.status).toBe(201);
+    const createdExplicit = await explicitCategoryRes.json();
+    expect(createdExplicit.category).toBe('vip');
+  });
+
   it('customers CRUD works and list pagination is clamped', async () => {
     const customersRoute = await import('../src/app/api/customers/route');
     const customerByIdRoute = await import('../src/app/api/customers/[id]/route');
@@ -360,6 +393,153 @@ describe('API routes (DB-backed)', () => {
       idParams(created.id) as any
     );
     expect(getMissing.status).toBe(404);
+  });
+
+  it('customer category standardization endpoint previews and applies safely', async () => {
+    const customersRoute = await import('../src/app/api/customers/route');
+    const standardizeRoute = await import('../src/app/api/customers/categories/standardize/route');
+
+    const suffix = Date.now().toString();
+
+    await customersRoute.POST(
+      jsonRequest('http://localhost/api/customers', 'POST', {
+        firstName: `Std Retail ${suffix}`,
+        category: 'retail',
+      }) as any
+    );
+    await customersRoute.POST(
+      jsonRequest('http://localhost/api/customers', 'POST', {
+        firstName: `Std VIP ${suffix}`,
+        category: 'vip',
+      }) as any
+    );
+
+    const previewRes = await standardizeRoute.GET(
+      new Request('http://localhost/api/customers/categories/standardize?target=wholesale') as any
+    );
+    expect(previewRes.status).toBe(200);
+    const preview = await previewRes.json();
+    expect(preview.target).toBe('wholesale');
+    expect(preview.total).toBeGreaterThan(0);
+    expect(preview.byCategory).toBeTruthy();
+
+    const badConfirmRes = await standardizeRoute.POST(
+      jsonRequest('http://localhost/api/customers/categories/standardize', 'POST', {
+        target: 'wholesale',
+        confirm: false,
+      }) as any
+    );
+    expect(badConfirmRes.status).toBe(400);
+
+    const applyRes = await standardizeRoute.POST(
+      jsonRequest('http://localhost/api/customers/categories/standardize', 'POST', {
+        target: 'wholesale',
+        confirm: true,
+      }) as any
+    );
+    expect(applyRes.status).toBe(200);
+    const applied = await applyRes.json();
+    expect(applied.target).toBe('wholesale');
+    expect(applied.updatedCount).toBeGreaterThanOrEqual(1);
+
+    const secondApplyRes = await standardizeRoute.POST(
+      jsonRequest('http://localhost/api/customers/categories/standardize', 'POST', {
+        target: 'wholesale',
+        confirm: true,
+      }) as any
+    );
+    expect(secondApplyRes.status).toBe(200);
+    const secondApply = await secondApplyRes.json();
+    expect(secondApply.updatedCount).toBe(0);
+
+    mockRequireSession.mockResolvedValueOnce(null);
+    const unauthorizedRes = await standardizeRoute.GET(
+      new Request('http://localhost/api/customers/categories/standardize?target=wholesale') as any
+    );
+    expect(unauthorizedRes.status).toBe(401);
+
+    mockRequireSession.mockResolvedValueOnce({
+      user: {
+        id: USER_ID,
+        email: USER_EMAIL,
+        currentOrgId: ORG_ID,
+        currentOrgRole: 'member',
+      },
+    });
+    const forbiddenRes = await standardizeRoute.POST(
+      jsonRequest('http://localhost/api/customers/categories/standardize', 'POST', {
+        target: 'wholesale',
+        confirm: true,
+      }) as any
+    );
+    expect(forbiddenRes.status).toBe(403);
+  });
+
+  it('POST /api/customers/import normalizes and defaults category to wholesale', async () => {
+    const importRoute = await import('../src/app/api/customers/import/route');
+
+    const suffix = Date.now().toString();
+    const res = await importRoute.POST(
+      jsonRequest('http://localhost/api/customers/import', 'POST', {
+        customers: [
+          { firstName: `Import Wholesale ${suffix}`, category: 'Χονδρική' },
+          { firstName: `Import Unknown ${suffix}`, category: 'not-a-category' },
+        ],
+      }) as any
+    );
+
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.success).toBe(2);
+
+    const importedWholesale = await db.query.customers.findFirst({
+      where: (c, { and: whereAnd, eq: whereEq }) =>
+        whereAnd(whereEq(c.orgId, ORG_ID), whereEq(c.firstName, `Import Wholesale ${suffix}`)),
+    });
+    const importedUnknown = await db.query.customers.findFirst({
+      where: (c, { and: whereAnd, eq: whereEq }) =>
+        whereAnd(whereEq(c.orgId, ORG_ID), whereEq(c.firstName, `Import Unknown ${suffix}`)),
+    });
+
+    expect(importedWholesale?.category).toBe('wholesale');
+    expect(importedUnknown?.category).toBe('wholesale');
+  });
+
+  it('POST /api/migrate normalizes and defaults category to wholesale', async () => {
+    const migrateRoute = await import('../src/app/api/migrate/route');
+    const prevEnabled = process.env.ENABLE_MIGRATE_ENDPOINT;
+    process.env.ENABLE_MIGRATE_ENDPOINT = 'true';
+
+    try {
+      const suffix = Date.now().toString();
+      const res = await migrateRoute.POST(
+        jsonRequest('http://localhost/api/migrate', 'POST', {
+          customers: [
+            { FirstName: `Migrate Wholesale ${suffix}`, Category: 'Χονδρική' },
+            { FirstName: `Migrate Unknown ${suffix}`, Category: 'unknown_category' },
+          ],
+          clearExisting: false,
+        }) as any
+      );
+
+      expect(res.status).toBe(200);
+      const payload = await res.json();
+      expect(payload.success).toBe(true);
+
+      const migratedWholesale = await db.query.customers.findFirst({
+        where: (c, { and: whereAnd, eq: whereEq }) =>
+          whereAnd(whereEq(c.orgId, ORG_ID), whereEq(c.firstName, `Migrate Wholesale ${suffix}`)),
+      });
+      const migratedUnknown = await db.query.customers.findFirst({
+        where: (c, { and: whereAnd, eq: whereEq }) =>
+          whereAnd(whereEq(c.orgId, ORG_ID), whereEq(c.firstName, `Migrate Unknown ${suffix}`)),
+      });
+
+      expect(migratedWholesale?.category).toBe('wholesale');
+      expect(migratedUnknown?.category).toBe('wholesale');
+    } finally {
+      process.env.ENABLE_MIGRATE_ENDPOINT = prevEnabled;
+    }
   });
 
   it('customer export neutralizes formula injection in CSV output', async () => {

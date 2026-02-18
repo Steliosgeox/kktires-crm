@@ -27,6 +27,10 @@ import { GlassInput } from '@/components/ui/glass-input';
 import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
 import { toast } from '@/lib/stores/ui-store';
+import {
+  CUSTOMER_CATEGORY_COLORS,
+  getCustomerCategoryColor,
+} from '@/lib/customers/category';
 
 interface CustomerLocation {
   id: string;
@@ -78,15 +82,6 @@ if (typeof window !== 'undefined') {
     isEmpty: rawApiKey?.trim().length === 0,
   });
 }
-
-const categoryColors: Record<string, string> = {
-  vip: '#f59e0b',
-  premium: '#8b5cf6',
-  wholesale: '#10b981',
-  fleet: '#3b82f6',
-  garage: '#ef4444',
-  retail: '#06b6d4',
-};
 
 export default function MapPage() {
   const { data: session } = useSession();
@@ -277,8 +272,8 @@ export default function MapPage() {
     // Add only new markers
     newCustomers.forEach(customer => {
       const color = customer.isVip
-        ? categoryColors.vip
-        : categoryColors[customer.category || 'retail'] || categoryColors.retail;
+        ? CUSTOMER_CATEGORY_COLORS.vip
+        : getCustomerCategoryColor(customer.category);
 
       const marker = new google.maps.Marker({
         position: { lat: customer.latitude, lng: customer.longitude },
@@ -561,19 +556,31 @@ export default function MapPage() {
               <p className="font-medium text-white/70 mb-2">Υπόμνημα</p>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: categoryColors.vip }} />
+                  <div
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: CUSTOMER_CATEGORY_COLORS.vip }}
+                  />
                   <span className="text-white/50">VIP</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: categoryColors.premium }} />
+                  <div
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: CUSTOMER_CATEGORY_COLORS.premium }}
+                  />
                   <span className="text-white/50">Premium</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: categoryColors.wholesale }} />
+                  <div
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: CUSTOMER_CATEGORY_COLORS.wholesale }}
+                  />
                   <span className="text-white/50">Χονδρική</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: categoryColors.retail }} />
+                  <div
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: CUSTOMER_CATEGORY_COLORS.retail }}
+                  />
                   <span className="text-white/50">Λιανική</span>
                 </div>
               </div>

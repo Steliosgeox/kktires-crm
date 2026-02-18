@@ -6,6 +6,10 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { customers, customerTags, tags } from '@/lib/db/schema';
 import {
+  DEFAULT_CUSTOMER_CATEGORY,
+  normalizeCustomerCategory,
+} from '@/lib/customers/category';
+import {
   createRequestId,
   handleApiError,
   parsePagination,
@@ -41,6 +45,7 @@ export async function GET(request: NextRequest) {
     const search = (searchParams.get('search') || '').trim().slice(0, 120);
     const category = (searchParams.get('category') || '').trim();
     const city = (searchParams.get('city') || '').trim().slice(0, 120);
+    const vip = (searchParams.get('vip') || '').trim();
     const { page, limit, offset } = parsePagination(searchParams, {
       defaultPage: 1,
       defaultLimit: 50,
@@ -70,6 +75,12 @@ export async function GET(request: NextRequest) {
 
     if (city) {
       whereParts.push(like(customers.city, `%${city}%`));
+    }
+
+    if (vip === 'true') {
+      whereParts.push(eq(customers.isVip, true));
+    } else if (vip === 'false') {
+      whereParts.push(eq(customers.isVip, false));
     }
 
     const query = db
@@ -176,7 +187,7 @@ export async function POST(request: NextRequest) {
         country: body.country || 'Ελλάδα',
         afm: body.afm || null,
         doy: body.doy || null,
-        category: body.category || 'retail',
+        category: normalizeCustomerCategory(body.category) ?? DEFAULT_CUSTOMER_CATEGORY,
         revenue: body.revenue || 0,
         isVip: body.isVip || false,
         notes: body.notes || null,

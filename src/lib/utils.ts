@@ -1,5 +1,10 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import {
+  CUSTOMER_CATEGORY_COLORS,
+  CUSTOMER_CATEGORY_LABELS,
+  getCustomerCategoryLabel,
+} from '@/lib/customers/category';
 
 /**
  * Merge Tailwind CSS classes with clsx
@@ -101,32 +106,16 @@ export function getRandomColor(): string {
 /**
  * Customer category labels
  */
-export const categoryLabels: Record<string, string> = {
-  retail: 'Λιανική',
-  wholesale: 'Χονδρική',
-  fleet: 'Στόλος',
-  government: 'Δημόσιο',
-  premium: 'Premium',
-  vip: 'VIP',
-  partner: 'Συνεργάτης',
-};
+export const categoryLabels = CUSTOMER_CATEGORY_LABELS;
 
 export function getCategoryLabel(category: string): string {
-  return categoryLabels[category] || category;
+  return getCustomerCategoryLabel(category);
 }
 
 /**
  * Customer category colors
  */
-export const categoryColors: Record<string, string> = {
-  retail: '#10b981',
-  wholesale: '#0ea5e9',
-  fleet: '#8b5cf6',
-  government: '#6366f1',
-  premium: '#f59e0b',
-  vip: '#ec4899',
-  partner: '#14b8a6',
-};
+export const categoryColors: Record<string, string> = CUSTOMER_CATEGORY_COLORS;
 
 /**
  * Lead status labels

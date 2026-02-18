@@ -50,9 +50,7 @@ export const customerCreateRequestSchema = customerInsertSchema
     unsubscribed: true,
   })
   .extend({
-    category: z
-      .enum(['retail', 'wholesale', 'fleet', 'garage', 'vip', 'premium', 'standard', 'basic'])
-      .optional(),
+    category: z.string().trim().max(64).optional(),
     revenue: z.number().finite().nonnegative().max(1_000_000_000).optional(),
     isVip: z.boolean().optional(),
   });

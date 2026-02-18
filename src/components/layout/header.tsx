@@ -16,6 +16,9 @@ interface HeaderProps {
   showSearch?: boolean;
 }
 
+const SHELL_CUSTOMERS_REFACTOR_ENABLED =
+  process.env.NEXT_PUBLIC_UI_REFACTOR_SHELL_CUSTOMERS === 'true';
+
 export function Header({ title, showSearch = true }: HeaderProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +57,8 @@ export function Header({ title, showSearch = true }: HeaderProps) {
     <header
       className={cn(
         'fixed top-0 right-0 z-30 flex h-16 items-center justify-between border-b border-white/[0.08] bg-zinc-950/80 backdrop-blur-xl px-6 transition-all duration-200',
+        SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+          'border-[var(--border-soft)] bg-[var(--surface-2)]/95 backdrop-blur-sm',
         {
           'left-0': true,
           'lg:left-[260px]': !sidebarCollapsed,
@@ -84,7 +89,11 @@ export function Header({ title, showSearch = true }: HeaderProps) {
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={openCommandPalette}
               leftIcon={<Search className="h-4 w-4" />}
-              className="pr-12"
+              className={cn(
+                'pr-12',
+                SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+                  '!bg-[var(--surface-1)] !border-[var(--border-soft)] !backdrop-blur-none !shadow-none'
+              )}
             />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
               <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-white/[0.1] bg-white/[0.03] px-1.5 text-[10px] text-white/40">

@@ -4,6 +4,10 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { customers, db } from '@/lib/db';
+import {
+  DEFAULT_CUSTOMER_CATEGORY,
+  normalizeCustomerCategory,
+} from '@/lib/customers/category';
 import { createRequestId, handleApiError, withValidatedBody } from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
@@ -103,7 +107,8 @@ export async function POST(request: NextRequest) {
           country: customer.country?.trim() || 'Ελλάδα',
           afm,
           doy: customer.doy?.trim() || null,
-          category: customer.category?.trim() || 'retail',
+          category:
+            normalizeCustomerCategory(customer.category ?? '') ?? DEFAULT_CUSTOMER_CATEGORY,
           notes: customer.notes?.trim() || null,
           lifecycleStage: 'customer',
           leadSource: 'import',

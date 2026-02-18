@@ -6,23 +6,10 @@ import { nanoid } from 'nanoid';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createRequestId, jsonError, withValidatedBody } from '@/server/api/http';
 import { z } from 'zod';
-
-// Map Greek category names to our schema
-const categoryMap: Record<string, string> = {
-  'Λιανική': 'retail',
-  'Χονδρική': 'wholesale',
-  'Στόλος': 'fleet',
-  'VIP': 'vip',
-  'Premium': 'premium',
-  'Συνεργείο': 'garage',
-  'Taxi': 'fleet',
-  'retail': 'retail',
-  'wholesale': 'wholesale',
-  'fleet': 'fleet',
-  'vip': 'vip',
-  'premium': 'premium',
-  'garage': 'garage',
-};
+import {
+  DEFAULT_CUSTOMER_CATEGORY,
+  normalizeCustomerCategory,
+} from '@/lib/customers/category';
 
 interface WPFCustomer {
   // Common fields from WPF database
@@ -105,8 +92,8 @@ function normalizeCustomer(raw: WPFCustomer): {
   const postalCode = raw.PostalCode || raw.postalCode || raw.postal_code || null;
   const afm = raw.AFM || raw.afm || raw.Afm || null;
   const doy = raw.DOY || raw.doy || raw.Doy || null;
-  const rawCategory = raw.Category || raw.category || 'retail';
-  const category = categoryMap[rawCategory] || 'retail';
+  const rawCategory = raw.Category || raw.category || '';
+  const category = normalizeCustomerCategory(String(rawCategory)) ?? DEFAULT_CUSTOMER_CATEGORY;
   const revenue = raw.Revenue || raw.revenue || 0;
   const isVip = raw.IsVip || raw.isVip || raw.is_vip || false;
   const notes = raw.Notes || raw.notes || null;

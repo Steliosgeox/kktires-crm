@@ -19,7 +19,11 @@ import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassTabs, GlassTabsList, GlassTabsTrigger } from '@/components/ui/glass-tabs';
 import { GlassProgressCircle } from '@/components/ui/glass-progress';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
-import { cn, formatCurrency, getCategoryLabel, categoryColors } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import {
+  getCustomerCategoryLabel,
+  getCustomerCategoryColor,
+} from '@/lib/customers/category';
 
 interface StatsData {
   overview: {
@@ -225,7 +229,7 @@ export default function StatisticsPage() {
                 <div key={item.category}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm text-white/70">
-                      {getCategoryLabel(item.category)}
+                      {getCustomerCategoryLabel(item.category)}
                     </span>
                     <span className="text-sm text-white/50">
                       {item.count} ({item.percentage}%)
@@ -236,7 +240,7 @@ export default function StatisticsPage() {
                       className="h-full rounded-full transition-all"
                       style={{
                         width: `${item.percentage}%`,
-                        backgroundColor: categoryColors[item.category] || '#6366F1',
+                        backgroundColor: getCustomerCategoryColor(item.category),
                       }}
                     />
                   </div>

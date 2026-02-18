@@ -28,6 +28,9 @@ interface CommandItem {
   category: string;
 }
 
+const SHELL_CUSTOMERS_REFACTOR_ENABLED =
+  process.env.NEXT_PUBLIC_UI_REFACTOR_SHELL_CUSTOMERS === 'true';
+
 export function CommandPalette() {
   const router = useRouter();
   const { commandPaletteOpen, closeCommandPalette, toggleCommandPalette } = useUIStore();
@@ -132,7 +135,10 @@ export function CommandPalette() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className={cn(
+              'absolute inset-0 bg-black/60 backdrop-blur-sm',
+              SHELL_CUSTOMERS_REFACTOR_ENABLED && 'backdrop-blur-[2px]'
+            )}
             onClick={closeCommandPalette}
           />
 
@@ -141,7 +147,11 @@ export function CommandPalette() {
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            className="relative w-full max-w-xl rounded-2xl border border-white/[0.08] bg-zinc-900/95 backdrop-blur-xl shadow-2xl overflow-hidden"
+            className={cn(
+              'relative w-full max-w-xl overflow-hidden rounded-2xl border border-white/[0.08] bg-zinc-900/95 backdrop-blur-xl shadow-2xl',
+              SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+                'border-[var(--border-soft)] bg-[var(--surface-2)]/98 backdrop-blur-sm shadow-xl'
+            )}
           >
             {/* Search Input */}
             <div className="flex items-center gap-3 border-b border-white/[0.08] px-4">

@@ -15,23 +15,39 @@ import { GlassAvatar } from '@/components/ui/glass-avatar';
 import { GlassTooltip } from '@/components/ui/glass-tooltip';
 import { bottomNavigation, mainNavigation } from '@/components/layout/navigation';
 
+const SHELL_CUSTOMERS_REFACTOR_ENABLED =
+  process.env.NEXT_PUBLIC_UI_REFACTOR_SHELL_CUSTOMERS === 'true';
+
+type SessionUserWithOrgRole = {
+  name?: string | null;
+  email?: string | null;
+  currentOrgRole?: string;
+  image?: string | null;
+};
+
 export function Sidebar() {
   const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const { data: session } = useSession();
-  const rawName = session?.user?.name?.trim();
-  const email = session?.user?.email?.trim();
+  const sessionUser = session?.user as SessionUserWithOrgRole | undefined;
+  const rawName = sessionUser?.name?.trim();
+  const email = sessionUser?.email?.trim();
   const name = rawName && rawName.toLowerCase() !== 'user' ? rawName : null;
 
-  const role = (session?.user as any)?.currentOrgRole as string | undefined;
+  const role = sessionUser?.currentOrgRole;
   const canAdmin = role === 'owner' || role === 'admin';
 
   return (
     <motion.aside
       initial={false}
-      animate={{ width: sidebarCollapsed ? 72 : 260 }}
-      transition={{ duration: 0.2 }}
-      className="fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-white/[0.08] bg-zinc-950/90 backdrop-blur-xl lg:flex"
+      animate={SHELL_CUSTOMERS_REFACTOR_ENABLED ? undefined : { width: sidebarCollapsed ? 72 : 260 }}
+      transition={SHELL_CUSTOMERS_REFACTOR_ENABLED ? undefined : { duration: 0.2 }}
+      className={cn(
+        'fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-white/[0.08] bg-zinc-950/90 backdrop-blur-xl lg:flex',
+        SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+          'w-[260px] border-[var(--border-soft)] bg-[var(--surface-2)]/95 backdrop-blur-sm transition-[width] duration-200',
+        SHELL_CUSTOMERS_REFACTOR_ENABLED && sidebarCollapsed && 'w-[72px]'
+      )}
     >
       {/* Logo */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-white/[0.08]">
@@ -77,7 +93,11 @@ export function Sidebar() {
                 {
                   'bg-gradient-to-r from-cyan-500/20 to-violet-500/20 text-white border border-cyan-500/30':
                     isActive,
+                  'bg-[var(--surface-3)] text-[var(--text-1)] border border-[var(--border-strong)]':
+                    isActive && SHELL_CUSTOMERS_REFACTOR_ENABLED,
                   'text-white/60 hover:text-white hover:bg-white/[0.05]': !isActive,
+                  'text-[var(--text-2)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)]':
+                    !isActive && SHELL_CUSTOMERS_REFACTOR_ENABLED,
                   'justify-center': sidebarCollapsed,
                 }
               )}
@@ -115,7 +135,11 @@ export function Sidebar() {
                 'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
                 {
                   'bg-white/[0.08] text-white': isActive,
+                  'bg-[var(--surface-3)] text-[var(--text-1)] border border-[var(--border-strong)]':
+                    isActive && SHELL_CUSTOMERS_REFACTOR_ENABLED,
                   'text-white/60 hover:text-white hover:bg-white/[0.05]': !isActive,
+                  'text-[var(--text-2)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)]':
+                    !isActive && SHELL_CUSTOMERS_REFACTOR_ENABLED,
                   'justify-center': sidebarCollapsed,
                 }
               )}
@@ -147,7 +171,7 @@ export function Sidebar() {
         >
           <GlassAvatar
             name={name || email || 'User'}
-            src={(session?.user as any)?.image || undefined}
+            src={sessionUser?.image || undefined}
             size="sm"
           />
           {!sidebarCollapsed && (

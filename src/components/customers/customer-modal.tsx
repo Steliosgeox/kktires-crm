@@ -7,6 +7,11 @@ import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassTextarea } from '@/components/ui/glass-textarea';
 import { GlassSelect } from '@/components/ui/glass-select';
+import {
+  CUSTOMER_CATEGORIES,
+  CUSTOMER_CATEGORY_LABELS,
+  DEFAULT_CUSTOMER_CATEGORY,
+} from '@/lib/customers/category';
 
 interface Customer {
   id?: string;
@@ -35,14 +40,10 @@ interface CustomerModalProps {
   onSave?: (customer: Customer) => Promise<void>;
 }
 
-const categoryOptions = [
-  { value: 'retail', label: 'Λιανική' },
-  { value: 'wholesale', label: 'Χονδρική' },
-  { value: 'fleet', label: 'Στόλος' },
-  { value: 'garage', label: 'Συνεργείο' },
-  { value: 'vip', label: 'VIP' },
-  { value: 'premium', label: 'Premium' },
-];
+const categoryOptions = CUSTOMER_CATEGORIES.map((category) => ({
+  value: category,
+  label: CUSTOMER_CATEGORY_LABELS[category],
+}));
 
 const emptyCustomer: Customer = {
   firstName: '',
@@ -56,7 +57,7 @@ const emptyCustomer: Customer = {
   postalCode: null,
   afm: null,
   doy: null,
-  category: 'retail',
+  category: DEFAULT_CUSTOMER_CATEGORY,
   revenue: 0,
   isVip: false,
   notes: null,
@@ -156,7 +157,7 @@ export function CustomerModal({ isOpen, onClose, customer, mode, onSave }: Custo
             />
             <GlassSelect
               label="Κατηγορία"
-              value={formData.category ?? 'retail'}
+              value={formData.category ?? DEFAULT_CUSTOMER_CATEGORY}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChange('category', e.target.value)}
               options={categoryOptions}
               disabled={isReadOnly}

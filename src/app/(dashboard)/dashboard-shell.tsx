@@ -15,6 +15,16 @@ import { GlassAvatar } from '@/components/ui/glass-avatar';
 import { X, LogOut } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 
+const SHELL_CUSTOMERS_REFACTOR_ENABLED =
+  process.env.NEXT_PUBLIC_UI_REFACTOR_SHELL_CUSTOMERS === 'true';
+
+type SessionUserWithOrgRole = {
+  name?: string | null;
+  email?: string | null;
+  currentOrgRole?: string;
+  image?: string | null;
+};
+
 function NotificationsPanel() {
   const open = useUIStore((s) => s.notificationsOpen);
   const setOpen = useUIStore((s) => s.setNotificationsOpen);
@@ -26,10 +36,19 @@ function NotificationsPanel() {
       <button
         type="button"
         aria-label="Close notifications"
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className={cn(
+          'absolute inset-0 bg-black/60 backdrop-blur-sm',
+          SHELL_CUSTOMERS_REFACTOR_ENABLED && 'backdrop-blur-[2px]'
+        )}
         onClick={() => setOpen(false)}
       />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-sm border-l border-white/[0.08] bg-zinc-950/95 backdrop-blur-xl">
+      <aside
+        className={cn(
+          'absolute right-0 top-0 h-full w-full max-w-sm border-l border-white/[0.08] bg-zinc-950/95 backdrop-blur-xl',
+          SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+            'border-[var(--border-soft)] bg-[var(--surface-2)]/95 backdrop-blur-sm'
+        )}
+      >
         <div className="flex items-center justify-between border-b border-white/[0.08] p-4">
           <h2 className="text-sm font-semibold text-white">Ειδοποιήσεις</h2>
           <button
@@ -55,8 +74,9 @@ function MobileSidebar() {
   const open = useUIStore((s) => s.mobileMenuOpen);
   const setOpen = useUIStore((s) => s.setMobileMenuOpen);
   const { data: session } = useSession();
+  const sessionUser = session?.user as SessionUserWithOrgRole | undefined;
 
-  const role = (session?.user as any)?.currentOrgRole as string | undefined;
+  const role = sessionUser?.currentOrgRole;
   const canAdmin = role === 'owner' || role === 'admin';
 
   if (!open) return null;
@@ -66,11 +86,20 @@ function MobileSidebar() {
       <button
         type="button"
         aria-label="Close menu"
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className={cn(
+          'absolute inset-0 bg-black/60 backdrop-blur-sm',
+          SHELL_CUSTOMERS_REFACTOR_ENABLED && 'backdrop-blur-[2px]'
+        )}
         onClick={() => setOpen(false)}
       />
 
-      <aside className="absolute left-0 top-0 flex h-full w-[280px] flex-col border-r border-white/[0.08] bg-zinc-950/95 backdrop-blur-xl">
+      <aside
+        className={cn(
+          'absolute left-0 top-0 flex h-full w-[280px] flex-col border-r border-white/[0.08] bg-zinc-950/95 backdrop-blur-xl',
+          SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+            'border-[var(--border-soft)] bg-[var(--surface-2)]/95 backdrop-blur-sm'
+        )}
+      >
         <div className="flex h-16 items-center justify-between px-4 border-b border-white/[0.08]">
           <Link
             href="/"
@@ -151,16 +180,16 @@ function MobileSidebar() {
         <div className="p-3 border-t border-white/[0.08]">
           <div className="flex items-center gap-3 rounded-xl p-2">
             <GlassAvatar
-              name={session?.user?.name || session?.user?.email || 'User'}
-              src={(session?.user as any)?.image || undefined}
+              name={sessionUser?.name || sessionUser?.email || 'User'}
+              src={sessionUser?.image || undefined}
               size="sm"
             />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate">
-                {session?.user?.name || session?.user?.email || 'Χρήστης'}
+                {sessionUser?.name || sessionUser?.email || 'Χρήστης'}
               </p>
               <p className="text-xs text-white/50 truncate">
-                {session?.user?.email || ''}
+                {sessionUser?.email || ''}
               </p>
             </div>
             <button
@@ -182,7 +211,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div
+      className={cn(
+        'min-h-screen bg-zinc-950',
+        SHELL_CUSTOMERS_REFACTOR_ENABLED && 'shell-customers-refactor bg-[var(--surface-1)]'
+      )}
+    >
       {/* Aurora Background */}
       <AuroraBackground />
 
@@ -197,7 +231,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
         })}
       >
         <Header />
-        <div className="p-6">{children}</div>
+        <div className={cn('p-6', SHELL_CUSTOMERS_REFACTOR_ENABLED && 'md:p-5')}>{children}</div>
       </main>
 
       {/* Global Components */}

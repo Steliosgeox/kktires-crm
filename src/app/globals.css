@@ -7,9 +7,9 @@
    ============================================ */
 
 :root {
-  /* Base Colors - Lighter dark theme */
-  --background: #14151a;
-  --foreground: #f4f4f8;
+  /* Base Colors - Industrial dark theme */
+  --background: #0f1115;
+  --foreground: #f2f3f5;
 
   /* Aurora Gradient Colors */
   --aurora-1: #0ea5e9;
@@ -21,12 +21,12 @@
   --aurora-4: #10b981;
   /* Emerald */
 
-  /* Glass Effect Variables - More visible */
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-bg-hover: rgba(255, 255, 255, 0.08);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-border-hover: rgba(255, 255, 255, 0.20);
-  --glass-blur: 16px;
+  /* Glass Effect Variables */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-hover: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-hover: rgba(255, 255, 255, 0.16);
+  --glass-blur: 10px;
 
   /* Accent Colors */
   --accent-primary: #0ea5e9;
@@ -36,10 +36,22 @@
   --accent-warning: #f59e0b;
   --accent-error: #ef4444;
 
-  /* Text Colors - Better contrast */
-  --text-primary: #f4f4f8;
-  --text-secondary: #b4b4c0;
-  --text-muted: #7a7a88;
+  /* Text Colors */
+  --text-primary: #f2f3f5;
+  --text-secondary: #c4c7cf;
+  --text-muted: #8d93a3;
+
+  /* Semantic UI Tokens (Shell + Customers refactor) */
+  --surface-1: #0f1115;
+  --surface-2: #151923;
+  --surface-3: #1b2230;
+  --border-soft: rgba(196, 203, 216, 0.18);
+  --border-strong: rgba(196, 203, 216, 0.34);
+  --text-1: #eef2f7;
+  --text-2: #b9c1d1;
+  --text-3: #8d96a8;
+  --accent-primary-strong: #38bdf8;
+  --focus-ring: rgba(56, 189, 248, 0.45);
 
   /* Glow Effects */
   --glow-primary: 0 0 20px rgba(14, 165, 233, 0.25);
@@ -47,7 +59,7 @@
   --glow-success: 0 0 20px rgba(16, 185, 129, 0.25);
   --glow-error: 0 0 20px rgba(239, 68, 68, 0.25);
 
-  /* Shadows for depth */
+  /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
@@ -77,6 +89,18 @@
   --text-primary: #1a1d24;
   --text-secondary: #52586a;
   --text-muted: #8b92a5;
+
+  /* Semantic UI Tokens - Light */
+  --surface-1: #f4f6f9;
+  --surface-2: #ffffff;
+  --surface-3: #eef2f6;
+  --border-soft: rgba(58, 68, 84, 0.14);
+  --border-strong: rgba(58, 68, 84, 0.24);
+  --text-1: #17202f;
+  --text-2: #4d5a6f;
+  --text-3: #6d7a8f;
+  --accent-primary-strong: #0284c7;
+  --focus-ring: rgba(14, 165, 233, 0.28);
 
   /* Shadows for light mode */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
@@ -267,10 +291,14 @@ body {
     radial-gradient(ellipse at 80% 20%, var(--aurora-2) 0%, transparent 50%),
     radial-gradient(ellipse at 40% 80%, var(--aurora-3) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 80%, var(--aurora-4) 0%, transparent 50%);
-  opacity: 0.08;
-  animation: aurora-drift 25s ease-in-out infinite;
-  /* Reduced from 80px to 40px for lower GPU strain */
-  filter: blur(40px);
+  opacity: 0.06;
+  animation: aurora-drift 34s ease-in-out infinite;
+  filter: blur(28px);
+  will-change: transform;
+}
+
+.aurora-background[data-visible='false']::before {
+  animation-play-state: paused;
 }
 
 @keyframes aurora-drift {
@@ -281,15 +309,15 @@ body {
   }
 
   25% {
-    transform: translate(3%, 3%) rotate(2deg);
+    transform: translate(1.5%, 1.5%) rotate(0.6deg);
   }
 
   50% {
-    transform: translate(-3%, 6%) rotate(-2deg);
+    transform: translate(-1.5%, 2.5%) rotate(-0.6deg);
   }
 
   75% {
-    transform: translate(-6%, -3%) rotate(1deg);
+    transform: translate(-2.2%, -1.3%) rotate(0.4deg);
   }
 }
 
@@ -742,6 +770,44 @@ body {
 
 .animate-pulse-slow {
   animation: pulse 3s ease-in-out infinite;
+}
+
+/* ============================================
+   SHELL + CUSTOMERS REFACTOR
+   ============================================ */
+
+.shell-customers-refactor {
+  background: var(--surface-1);
+}
+
+.shell-customers-refactor .customers-industrial {
+  color: var(--text-1);
+}
+
+.shell-customers-refactor .customers-industrial table thead th {
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+}
+
+.shell-customers-refactor .customers-industrial table tbody td {
+  color: var(--text-1);
+}
+
+.shell-customers-refactor .customers-industrial p {
+  color: var(--text-2);
+}
+
+.shell-customers-refactor .customers-industrial input[type='checkbox'] {
+  border-color: var(--border-soft);
+  background: var(--surface-3);
+}
+
+.shell-customers-refactor .customers-industrial button:focus-visible,
+.shell-customers-refactor .customers-industrial a:focus-visible,
+.shell-customers-refactor .customers-industrial input:focus-visible,
+.shell-customers-refactor .customers-industrial select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 @keyframes pulse {
