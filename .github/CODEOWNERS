@@ -1,0 +1,9 @@
+# Default ownership (replace with team handles as they are onboarded)
+* @Steliosgeox
+
+# High-risk application surfaces
+/src/app/api/ @Steliosgeox
+/src/worker/ @Steliosgeox
+/src/auth.ts @Steliosgeox
+/src/lib/db/ @Steliosgeox
+/drizzle/ @Steliosgeox

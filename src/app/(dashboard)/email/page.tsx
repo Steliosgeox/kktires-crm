@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { OutlookLayout } from '@/components/email/outlook-layout';
 import { OutlookSidebar } from '@/components/email/outlook-sidebar';
 import { OutlookList } from '@/components/email/outlook-list';
@@ -79,6 +80,10 @@ type ApiFailure = {
   unauthorized: boolean;
 };
 
+type RecipientsCountResponse = {
+  count?: number;
+};
+
 export default function EmailPage() {
   const router = useRouter();
 
@@ -113,10 +118,34 @@ export default function EmailPage() {
   const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [recipientCount, setRecipientCount] = useState<number>(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const recipientCountQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (recipientFilters.cities.length) params.set('cities', recipientFilters.cities.join(','));
+    if (recipientFilters.tags.length) params.set('tags', recipientFilters.tags.join(','));
+    if (recipientFilters.segments.length) params.set('segments', recipientFilters.segments.join(','));
+    if (recipientFilters.categories.length) params.set('categories', recipientFilters.categories.join(','));
+    return `/api/recipients/count?${params.toString()}`;
+  }, [recipientFilters]);
+
+  const { data: recipientCountData } = useSWR<RecipientsCountResponse>(
+    recipientCountQuery,
+    async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch recipient count: ${response.status}`);
+      }
+      return response.json() as Promise<RecipientsCountResponse>;
+    },
+    {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    }
+  );
+  const recipientCount = recipientCountData?.count ?? 0;
 
   // Computed folder counts
   const folderCounts = useMemo(() => ({
@@ -253,29 +282,6 @@ export default function EmailPage() {
     if (failure.requestId) parts.push(`requestId: ${failure.requestId}`);
     return parts.join(' | ');
   };
-
-  // Fetch recipient count when filters change
-  useEffect(() => {
-    const fetchRecipientCount = async () => {
-      try {
-        const params = new URLSearchParams();
-        if (recipientFilters.cities.length) params.set('cities', recipientFilters.cities.join(','));
-        if (recipientFilters.tags.length) params.set('tags', recipientFilters.tags.join(','));
-        if (recipientFilters.segments.length) params.set('segments', recipientFilters.segments.join(','));
-        if (recipientFilters.categories.length) params.set('categories', recipientFilters.categories.join(','));
-
-        const response = await fetch(`/api/recipients/count?${params.toString()}`);
-        if (response.ok) {
-          const data = await response.json();
-          setRecipientCount(data.count || 0);
-        }
-      } catch (err) {
-        console.error('Error fetching recipient count:', err);
-      }
-    };
-
-    fetchRecipientCount();
-  }, [recipientFilters]);
 
   // Handle section change
   const handleSectionChange = (sectionId: string) => {

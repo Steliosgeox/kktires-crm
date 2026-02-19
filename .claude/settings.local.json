@@ -4,7 +4,9 @@
       "Bash(npx tsc --noEmit --pretty)",
       "Bash(npx tsc:*)",
       "Bash(cat:*)",
-      "Bash(dir \"C:\\\\Users\\\\Stelios\\\\kktires-web\\\\drizzle\")"
+      "Bash(dir \"C:\\\\Users\\\\Stelios\\\\kktires-web\\\\drizzle\")",
+      "mcp__plugin_claude-mem_mcp-search__save_memory",
+      "Bash(find:*)"
     ]
   }
 }

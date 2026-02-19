@@ -18,9 +18,7 @@ interface MockMarker {
     getPosition: () => { lat: () => number; lng: () => number };
 }
 
-interface MockMap {
-    // Empty interface for map mock
-}
+type MockMap = Record<string, never>;
 
 // Customer location type matching the map page
 interface CustomerLocation {

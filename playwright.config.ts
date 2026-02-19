@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const e2ePort = Number(process.env.E2E_PORT || 3000);
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 60_000,
@@ -10,14 +13,14 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: e2eBaseUrl,
     trace: 'on-first-retry',
     storageState: './tests/.tmp/e2e.storageState.json',
   },
   globalSetup: './tests/e2e/global-setup.ts',
   webServer: {
-    command: 'node ./node_modules/next/dist/bin/next dev -p 3000',
-    url: 'http://127.0.0.1:3000',
+    command: `node ./node_modules/next/dist/bin/next dev -p ${e2ePort}`,
+    url: e2eBaseUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
@@ -26,7 +29,7 @@ export default defineConfig({
       DATABASE_AUTH_TOKEN: '',
       AUTH_SECRET: 'test',
       NEXTAUTH_SECRET: 'test',
-      NEXTAUTH_URL: 'http://127.0.0.1:3000',
+      NEXTAUTH_URL: e2eBaseUrl,
       AUTH_ALLOWED_EMAILS: 'test@example.com',
       DEFAULT_ORG_ID: 'org_kktires',
       SMTP_HOST: '127.0.0.1',

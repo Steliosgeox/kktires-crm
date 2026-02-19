@@ -18,10 +18,17 @@ This is a Next.js App Router CRM with an Outlook-style email/campaign UI. The ba
 Useful checks:
 - `npm run audit:stubs` (finds dead clicks/placeholder routes/alert/confirm usage)
 - `npm run lint`
+- `npm run quality:lint` (fails if ESLint warning budget regresses)
+- `npm run quality:react-doctor` (fails if React Doctor score/warnings regress)
+- `npm run quality:gate` (lint + React Doctor budgets)
 - `npm run typecheck`
 - `npm test`
 - `npm run baseline:collect` (captures route/test/lint/vulnerability baseline under `test-results/baseline`)
 - `npm run verify:all` (baseline + lint + typecheck + unit + e2e + build + security audit gate)
+
+Operational docs:
+- `docs/operations-runbook.md`
+- `docs/react-doctor-100-plan.md`
 
 ## Deploy On Vercel
 

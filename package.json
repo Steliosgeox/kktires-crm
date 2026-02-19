@@ -19,7 +19,11 @@
     "baseline:collect": "node scripts/collect-baseline.cjs",
     "audit:report": "node scripts/audit-gate.cjs --report-only",
     "audit:gate": "node scripts/audit-gate.cjs",
-    "verify:all": "npm run baseline:collect && npm run lint && npm run typecheck && npm test && npm run test:e2e && npm run build && npm run audit:gate",
+    "quality:lint": "node scripts/lint-budget-gate.cjs",
+    "quality:react-doctor": "node scripts/react-doctor-gate.cjs",
+    "quality:gate": "npm run quality:lint && npm run quality:react-doctor",
+    "react-doctor:scan": "npx -y react-doctor@latest . --verbose",
+    "verify:all": "npm run baseline:collect && npm run quality:lint && npm run typecheck && npm test && npm run test:e2e && npm run build && npm run quality:react-doctor && npm run audit:gate",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -47,6 +51,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.54.2",
     "recharts": "^2.15.0",
+    "swr": "^2.4.0",
     "tailwind-merge": "^2.6.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.2"
@@ -73,5 +78,22 @@
     "vite-tsconfig-paths": "^6.1.0",
     "vitest": "^4.0.18",
     "xlsx": "^0.18.5"
-  }
+  },
+  "description": "This is a Next.js App Router CRM with an Outlook-style email/campaign UI. The backend uses:",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Steliosgeox/kktires-crm.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Steliosgeox/kktires-crm/issues"
+  },
+  "homepage": "https://github.com/Steliosgeox/kktires-crm#readme"
 }

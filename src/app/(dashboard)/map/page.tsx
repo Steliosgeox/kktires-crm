@@ -646,8 +646,8 @@ export default function MapPage() {
             </div>
             <div className="space-y-1 max-h-[200px] overflow-y-auto">
               {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <GlassSkeleton key={i} className="h-10 w-full mb-1" />
+                ['city-skeleton-1', 'city-skeleton-2', 'city-skeleton-3', 'city-skeleton-4', 'city-skeleton-5'].map((skeletonId) => (
+                  <GlassSkeleton key={skeletonId} className="h-10 w-full mb-1" />
                 ))
               ) : cities.length === 0 ? (
                 <p className="text-white/40 text-sm text-center py-4">Δεν βρέθηκαν πόλεις</p>

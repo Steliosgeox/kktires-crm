@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
 import {
   User,
   Building2,
@@ -72,14 +72,30 @@ type PreferencesData = {
   theme: 'dark' | 'light';
 };
 
+type GmailStatus = {
+  connected: boolean;
+  hasRefreshToken: boolean;
+  scope: string | null;
+  email: string | null;
+};
+
+type SettingsBundle = {
+  profile: ProfileData;
+  org: OrgData;
+  prefs: PreferencesData;
+};
+
 export default function SettingsPage() {
-  const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
   const theme = useUIStore((s) => s.theme);
   const setTheme = useUIStore((s) => s.setTheme);
 
-  const [activeSection, setActiveSection] = useState('profile');
-  const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState(() => {
+    if (typeof window === 'undefined') return 'profile';
+    const section = new URLSearchParams(window.location.search).get('section');
+    if (!section) return 'profile';
+    return settingsNav.some((item) => item.id === section) ? section : 'profile';
+  });
 
   const [profile, setProfile] = useState<ProfileData>({
     name: null,
@@ -99,90 +115,86 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
   const [prefsTheme, setPrefsTheme] = useState<'dark' | 'light'>('dark');
   const [savingSection, setSavingSection] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [gmailStatus, setGmailStatus] = useState<{
-    connected: boolean;
-    hasRefreshToken: boolean;
-    scope: string | null;
-    email: string | null;
-  } | null>(null);
+  const { data: gmailStatus } = useSWR<GmailStatus | null>(
+    '/api/integrations/gmail',
+    async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      return response.json() as Promise<GmailStatus>;
+    },
+    { revalidateOnFocus: false }
+  );
 
-  useEffect(() => {
-    const section = searchParams.get('section');
-    if (!section) return;
-    if (settingsNav.some((s) => s.id === section)) {
-      setActiveSection(section);
-    }
-  }, [searchParams]);
+  const {
+    data: settingsBundle,
+    error: settingsError,
+    isLoading: settingsLoading,
+  } = useSWR<SettingsBundle>(
+    sessionStatus === 'authenticated' ? '/api/settings/bundle' : null,
+    async () => {
+      const [profileRes, orgRes, prefsRes] = await Promise.all([
+        fetch('/api/settings/profile'),
+        fetch('/api/settings/org'),
+        fetch('/api/settings/preferences'),
+      ]);
 
-  useEffect(() => {
-    fetch('/api/integrations/gmail')
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then((data) => {
-        if (data) setGmailStatus(data);
-      })
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    if (sessionStatus !== 'authenticated') return;
-
-    const load = async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const [profileRes, orgRes, prefsRes] = await Promise.all([
-          fetch('/api/settings/profile'),
-          fetch('/api/settings/org'),
-          fetch('/api/settings/preferences'),
-        ]);
-
-        if (!profileRes.ok) {
-          const msg = await profileRes.json().catch(() => null);
-          throw new Error(msg?.error || 'Failed to load profile');
-        }
-        if (!orgRes.ok) {
-          const msg = await orgRes.json().catch(() => null);
-          throw new Error(msg?.error || 'Failed to load organization');
-        }
-        if (!prefsRes.ok) {
-          const msg = await prefsRes.json().catch(() => null);
-          throw new Error(msg?.error || 'Failed to load preferences');
-        }
-
-        const profileData = (await profileRes.json()) as ProfileData;
-        setProfile(profileData);
-
-        const orgData = (await orgRes.json()) as OrgData;
-        const companyProfile = orgData.settings?.companyProfile;
-        setOrg({
-          name: orgData.name || '',
-          vatId: companyProfile?.vatId || '',
-          address: companyProfile?.address || '',
-          city: companyProfile?.city || '',
-          phone: companyProfile?.phone || '',
-          website: companyProfile?.website || '',
-        });
-
-        const prefsData = (await prefsRes.json()) as PreferencesData;
-        setNotifications(prefsData.notifications || DEFAULT_NOTIFICATIONS);
-        setPrefsTheme(prefsData.theme || 'dark');
-        setTheme(prefsData.theme || 'dark');
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Αποτυχία φόρτωσης ρυθμίσεων';
-        setLoadError(message);
-        toast.error('Αποτυχία φόρτωσης', message);
-      } finally {
-        setLoading(false);
+      if (!profileRes.ok) {
+        const payload = await profileRes.json().catch(() => null);
+        throw new Error(payload?.error || 'Failed to load profile');
       }
-    };
+      if (!orgRes.ok) {
+        const payload = await orgRes.json().catch(() => null);
+        throw new Error(payload?.error || 'Failed to load organization');
+      }
+      if (!prefsRes.ok) {
+        const payload = await prefsRes.json().catch(() => null);
+        throw new Error(payload?.error || 'Failed to load preferences');
+      }
 
-    load().catch(() => undefined);
-  }, [sessionStatus, setTheme]);
+      const profileData = (await profileRes.json()) as ProfileData;
+      const orgData = (await orgRes.json()) as OrgData;
+      const prefsData = (await prefsRes.json()) as PreferencesData;
+      return {
+        profile: profileData,
+        org: orgData,
+        prefs: prefsData,
+      };
+    },
+    { revalidateOnFocus: false }
+  );
+
+  useEffect(() => {
+    if (!settingsBundle) return;
+
+    setProfile(settingsBundle.profile);
+
+    const companyProfile = settingsBundle.org.settings?.companyProfile;
+    setOrg({
+      name: settingsBundle.org.name || '',
+      vatId: companyProfile?.vatId || '',
+      address: companyProfile?.address || '',
+      city: companyProfile?.city || '',
+      phone: companyProfile?.phone || '',
+      website: companyProfile?.website || '',
+    });
+
+    const nextTheme = settingsBundle.prefs.theme || 'dark';
+    setNotifications(settingsBundle.prefs.notifications || DEFAULT_NOTIFICATIONS);
+    setPrefsTheme(nextTheme);
+    setTheme(nextTheme);
+  }, [settingsBundle, setTheme]);
+
+  useEffect(() => {
+    if (!settingsError) return;
+    const message = settingsError instanceof Error
+      ? settingsError.message
+      : 'Αποτυχία φόρτωσης ρυθμίσεων';
+    toast.error('Αποτυχία φόρτωσης', message);
+  }, [settingsError]);
+
+  const loading = sessionStatus === 'authenticated' ? settingsLoading : false;
+  const loadError = settingsError instanceof Error ? settingsError.message : null;
 
   const handleSaveProfile = async () => {
     setSavingSection('profile');
@@ -594,7 +606,7 @@ export default function SettingsPage() {
               <h2 className="text-lg font-semibold text-white mb-6">Εμφάνιση</h2>
               <div className="space-y-6">
                 <div>
-                  <label className="text-sm font-medium text-white/70 block mb-3">Θέμα</label>
+                  <p className="text-sm font-medium text-white/70 block mb-3">Θέμα</p>
                   <div className="flex gap-4">
                     <button
                       type="button"

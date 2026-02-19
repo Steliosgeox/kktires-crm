@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { LazyMotion, domAnimation, m } from 'framer-motion';
 import { signOut, useSession } from 'next-auth/react';
 import {
   ChevronLeft,
@@ -38,17 +38,18 @@ export function Sidebar() {
   const canAdmin = role === 'owner' || role === 'admin';
 
   return (
-    <motion.aside
-      initial={false}
-      animate={SHELL_CUSTOMERS_REFACTOR_ENABLED ? undefined : { width: sidebarCollapsed ? 72 : 260 }}
-      transition={SHELL_CUSTOMERS_REFACTOR_ENABLED ? undefined : { duration: 0.2 }}
-      className={cn(
-        'fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-white/[0.08] bg-zinc-950/90 backdrop-blur-xl lg:flex',
-        SHELL_CUSTOMERS_REFACTOR_ENABLED &&
-          'w-[260px] border-[var(--border-soft)] bg-[var(--surface-2)]/95 backdrop-blur-sm transition-[width] duration-200',
-        SHELL_CUSTOMERS_REFACTOR_ENABLED && sidebarCollapsed && 'w-[72px]'
-      )}
-    >
+    <LazyMotion features={domAnimation}>
+      <m.aside
+        initial={false}
+        animate={SHELL_CUSTOMERS_REFACTOR_ENABLED ? undefined : { width: sidebarCollapsed ? 72 : 260 }}
+        transition={SHELL_CUSTOMERS_REFACTOR_ENABLED ? undefined : { duration: 0.2 }}
+        className={cn(
+          'fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-white/[0.08] bg-zinc-950/90 backdrop-blur-xl lg:flex',
+          SHELL_CUSTOMERS_REFACTOR_ENABLED &&
+            'w-[260px] border-[var(--border-soft)] bg-[var(--surface-2)]/95 backdrop-blur-sm transition-[width] duration-200',
+          SHELL_CUSTOMERS_REFACTOR_ENABLED && sidebarCollapsed && 'w-[72px]'
+        )}
+      >
       {/* Logo */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-white/[0.08]">
         <Link href="/" className="flex items-center gap-3">
@@ -56,14 +57,14 @@ export function Sidebar() {
             <span className="text-lg font-bold text-white">K</span>
           </div>
           {!sidebarCollapsed && (
-            <motion.span
+            <m.span
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="text-lg font-semibold text-white"
             >
               KK Tires
-            </motion.span>
+            </m.span>
           )}
         </Link>
         <button
@@ -195,7 +196,8 @@ export function Sidebar() {
           )}
         </div>
       </div>
-    </motion.aside>
+      </m.aside>
+    </LazyMotion>
   );
 }
 

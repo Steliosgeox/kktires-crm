@@ -1,82 +1,76 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useSession } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from 'next/navigation';
 import { Suspense } from 'react';
-import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { LazyMotion, domAnimation, m, useReducedMotion } from 'framer-motion';
+import { useState } from 'react';
 
 function LoginContent() {
-  const searchParams = useSearchParams();
-  const error = searchParams.get('error');
+  const [error] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('error');
+  });
   const callbackUrl = '/';
   const [email, setEmail] = useState('');
-  const router = useRouter();
-  const { status } = useSession();
-
-  // If already authenticated, don't leave the user on the login screen.
-  useEffect(() => {
-    if (status === 'authenticated') router.replace(callbackUrl);
-  }, [status, router, callbackUrl]);
+  const prefersReducedMotion = useReducedMotion();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#14151a] to-[#1a1b23]">
-      {/* Background effects */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
-      </div>
+    <LazyMotion features={domAnimation}>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a0a0f] via-[#14151a] to-[#1a1b23]">
+        {/* Background effects */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
+        </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
+      <m.div
+        initial={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.5 }}
         className="relative z-10 w-full max-w-md mx-4"
       >
         <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-xl p-8 shadow-2xl">
           {/* Logo */}
           <div className="text-center mb-8">
-            <motion.div
-              initial={{ scale: 0.8 }}
+            <m.div
+              initial={prefersReducedMotion ? { scale: 1 } : { scale: 0.8 }}
               animate={{ scale: 1 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.3, delay: prefersReducedMotion ? 0 : 0.2 }}
               className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-cyan-500/20 to-purple-500/20 border border-white/10 mb-4"
             >
               <svg className="w-8 h-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-            </motion.div>
+            </m.div>
             <h1 className="text-2xl font-bold text-white mb-2">KK Tires CRM</h1>
-            <p className="text-white/60">Συνδεθείτε με το Google λογαριασμό σας</p>
+            <p className="text-white/60">Î£Ï…Î½Î´ÎµÎ¸ÎµÎ¯Ï„Îµ Î¼Îµ Ï„Î¿ Google Î»Î¿Î³Î±ÏÎ¹Î±ÏƒÎ¼ÏŒ ÏƒÎ±Ï‚</p>
           </div>
 
           {/* Error message */}
           {error && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
             >
               {error === 'AccessDenied' && (
                 <>
-                  <strong className="block mb-1">Δεν επιτρέπεται η πρόσβαση</strong>
-                  Μόνο οι εξουσιοδοτημένοι χρήστες μπορούν να συνδεθούν.
+                  <strong className="block mb-1">Î”ÎµÎ½ ÎµÏ€Î¹Ï„ÏÎ­Ï€ÎµÏ„Î±Î¹ Î· Ï€ÏÏŒÏƒÎ²Î±ÏƒÎ·</strong>
+                  ÎœÏŒÎ½Î¿ Î¿Î¹ ÎµÎ¾Î¿Ï…ÏƒÎ¹Î¿Î´Î¿Ï„Î·Î¼Î­Î½Î¿Î¹ Ï‡ÏÎ®ÏƒÏ„ÎµÏ‚ Î¼Ï€Î¿ÏÎ¿ÏÎ½ Î½Î± ÏƒÏ…Î½Î´ÎµÎ¸Î¿ÏÎ½.
                 </>
               )}
               {error === 'OAuthCallback' && (
                 <>
-                  <strong className="block mb-1">Σφάλμα σύνδεσης</strong>
-                  Υπήρξε πρόβλημα με την σύνδεση Google. Δοκιμάστε ξανά.
+                  <strong className="block mb-1">Î£Ï†Î¬Î»Î¼Î± ÏƒÏÎ½Î´ÎµÏƒÎ·Ï‚</strong>
+                  Î¥Ï€Î®ÏÎ¾Îµ Ï€ÏÏŒÎ²Î»Î·Î¼Î± Î¼Îµ Ï„Î·Î½ ÏƒÏÎ½Î´ÎµÏƒÎ· Google. Î”Î¿ÎºÎ¹Î¼Î¬ÏƒÏ„Îµ Î¾Î±Î½Î¬.
                 </>
               )}
               {error === 'Configuration' && (
                 <>
-                  <strong className="block mb-1">Σφάλμα ρυθμίσεων</strong>
-                  Λείπουν ή είναι λάθος οι μεταβλητές περιβάλλοντος στο Vercel (DB/NextAuth/Google OAuth).
-                  Ελέγξτε πρώτα το <code className="px-1 rounded bg-white/10">/api/health</code> και μετά τις
-                  μεταβλητές: <code className="px-1 rounded bg-white/10">DATABASE_URL</code>,{' '}
+                  <strong className="block mb-1">Î£Ï†Î¬Î»Î¼Î± ÏÏ…Î¸Î¼Î¯ÏƒÎµÏ‰Î½</strong>
+                  Î›ÎµÎ¯Ï€Î¿Ï…Î½ Î® ÎµÎ¯Î½Î±Î¹ Î»Î¬Î¸Î¿Ï‚ Î¿Î¹ Î¼ÎµÏ„Î±Î²Î»Î·Ï„Î­Ï‚ Ï€ÎµÏÎ¹Î²Î¬Î»Î»Î¿Î½Ï„Î¿Ï‚ ÏƒÏ„Î¿ Vercel (DB/NextAuth/Google OAuth).
+                  Î•Î»Î­Î³Î¾Ï„Îµ Ï€ÏÏŽÏ„Î± Ï„Î¿ <code className="px-1 rounded bg-white/10">/api/health</code> ÎºÎ±Î¹ Î¼ÎµÏ„Î¬ Ï„Î¹Ï‚
+                  Î¼ÎµÏ„Î±Î²Î»Î·Ï„Î­Ï‚: <code className="px-1 rounded bg-white/10">DATABASE_URL</code>,{' '}
                   <code className="px-1 rounded bg-white/10">DATABASE_AUTH_TOKEN</code>,{' '}
                   <code className="px-1 rounded bg-white/10">NEXTAUTH_URL</code>,{' '}
                   <code className="px-1 rounded bg-white/10">NEXTAUTH_SECRET</code>,{' '}
@@ -87,26 +81,26 @@ function LoginContent() {
               )}
               {error === 'Verification' && (
                 <>
-                  <strong className="block mb-1">Σφάλμα επιβεβαίωσης</strong>
-                  Το link σύνδεσης έχει λήξει, έχει ήδη χρησιμοποιηθεί ή δημιουργήθηκε με διαφορετικό{' '}
-                  <code className="px-1 rounded bg-white/10">NEXTAUTH_SECRET</code>. Ζητήστε νέο link και πατήστε το
-                  μία φορά.
+                  <strong className="block mb-1">Î£Ï†Î¬Î»Î¼Î± ÎµÏ€Î¹Î²ÎµÎ²Î±Î¯Ï‰ÏƒÎ·Ï‚</strong>
+                  Î¤Î¿ link ÏƒÏÎ½Î´ÎµÏƒÎ·Ï‚ Î­Ï‡ÎµÎ¹ Î»Î®Î¾ÎµÎ¹, Î­Ï‡ÎµÎ¹ Î®Î´Î· Ï‡ÏÎ·ÏƒÎ¹Î¼Î¿Ï€Î¿Î¹Î·Î¸ÎµÎ¯ Î® Î´Î·Î¼Î¹Î¿Ï…ÏÎ³Î®Î¸Î·ÎºÎµ Î¼Îµ Î´Î¹Î±Ï†Î¿ÏÎµÏ„Î¹ÎºÏŒ{' '}
+                  <code className="px-1 rounded bg-white/10">NEXTAUTH_SECRET</code>. Î–Î·Ï„Î®ÏƒÏ„Îµ Î½Î­Î¿ link ÎºÎ±Î¹ Ï€Î±Ï„Î®ÏƒÏ„Îµ Ï„Î¿
+                  Î¼Î¯Î± Ï†Î¿ÏÎ¬.
                 </>
               )}
               {!['AccessDenied', 'OAuthCallback', 'Configuration', 'Verification'].includes(error) && (
                 <>
-                  <strong className="block mb-1">Σφάλμα</strong>
+                  <strong className="block mb-1">Î£Ï†Î¬Î»Î¼Î±</strong>
                   {error}
                 </>
               )}
-            </motion.div>
+            </m.div>
           )}
 
           {/* Google Sign In Button */}
-          <motion.button
-            initial={{ opacity: 0 }}
+          <m.button
+            initial={{ opacity: prefersReducedMotion ? 1 : 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: prefersReducedMotion ? 0 : 0.3 }}
             onClick={() => signIn('google', { callbackUrl })}
             className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-lg bg-white text-gray-900 font-medium hover:bg-gray-100 transition-colors shadow-lg"
           >
@@ -129,13 +123,13 @@ function LoginContent() {
               />
               <path fill="none" d="M1 1h22v22H1z" />
             </svg>
-            Σύνδεση με Google
-          </motion.button>
+            Î£ÏÎ½Î´ÎµÏƒÎ· Î¼Îµ Google
+          </m.button>
 
           {/* Email Link Sign In (for non-Gmail mailboxes like Roundcube) */}
           <div className="mt-6 space-y-3">
             <div className="text-xs text-white/50">
-              Εναλλακτικά, συνδεθείτε με email (θα λάβετε link σύνδεσης).
+              Î•Î½Î±Î»Î»Î±ÎºÏ„Î¹ÎºÎ¬, ÏƒÏ…Î½Î´ÎµÎ¸ÎµÎ¯Ï„Îµ Î¼Îµ email (Î¸Î± Î»Î¬Î²ÎµÏ„Îµ link ÏƒÏÎ½Î´ÎµÏƒÎ·Ï‚).
             </div>
             <input
               value={email}
@@ -150,22 +144,23 @@ function LoginContent() {
               disabled={!email.trim()}
               className="w-full px-6 py-3 rounded-lg bg-cyan-500/20 border border-cyan-400/30 text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Στείλε μου link σύνδεσης
+              Î£Ï„ÎµÎ¯Î»Îµ Î¼Î¿Ï… link ÏƒÏÎ½Î´ÎµÏƒÎ·Ï‚
             </button>
           </div>
 
           {/* Info */}
           <p className="mt-6 text-center text-white/40 text-sm">
-            Συνδεθείτε με τον Google λογαριασμό σας
+            Î£Ï…Î½Î´ÎµÎ¸ÎµÎ¯Ï„Îµ Î¼Îµ Ï„Î¿Î½ Google Î»Î¿Î³Î±ÏÎ¹Î±ÏƒÎ¼ÏŒ ÏƒÎ±Ï‚
           </p>
         </div>
 
         {/* Footer */}
         <p className="mt-6 text-center text-white/30 text-xs">
-          © {new Date().getFullYear()} KK Tires. All rights reserved.
+          Â© {new Date().getFullYear()} KK Tires. All rights reserved.
         </p>
-      </motion.div>
-    </div>
+      </m.div>
+      </div>
+    </LazyMotion>
   );
 }
 
@@ -180,6 +175,7 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+
 
 
 

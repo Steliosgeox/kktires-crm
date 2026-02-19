@@ -219,8 +219,8 @@ export default function StatisticsPage() {
           <h3 className="font-semibold text-white mb-6">Κατανομή Κατηγοριών</h3>
           {loading ? (
             <div className="space-y-4">
-              {[1, 2, 3, 4, 5].map(i => (
-                <GlassSkeleton key={i} className="h-8 w-full" />
+              {['category-1', 'category-2', 'category-3', 'category-4', 'category-5'].map((skeletonId) => (
+                <GlassSkeleton key={skeletonId} className="h-8 w-full" />
               ))}
             </div>
           ) : categoryDistribution.length > 0 ? (
@@ -258,8 +258,8 @@ export default function StatisticsPage() {
           {loading ? (
             <div className="space-y-4">
               <GlassSkeleton className="h-32 w-32 rounded-full mx-auto" />
-              {[1, 2, 3].map(i => (
-                <GlassSkeleton key={i} className="h-6 w-full" />
+              {['city-1', 'city-2', 'city-3'].map((skeletonId) => (
+                <GlassSkeleton key={skeletonId} className="h-6 w-full" />
               ))}
             </div>
           ) : cityWithPercentage.length > 0 ? (
@@ -273,7 +273,7 @@ export default function StatisticsPage() {
               </div>
               <div className="space-y-3">
                 {cityWithPercentage.slice(0, 5).map((item, i) => (
-                  <div key={i} className="flex items-center justify-between">
+                  <div key={item.city} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div
                         className="h-2 w-2 rounded-full"
@@ -307,8 +307,8 @@ export default function StatisticsPage() {
         </div>
         {loading ? (
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <GlassSkeleton key={i} className="h-12 w-full" />
+            {['top-customer-1', 'top-customer-2', 'top-customer-3', 'top-customer-4', 'top-customer-5'].map((skeletonId) => (
+              <GlassSkeleton key={skeletonId} className="h-12 w-full" />
             ))}
           </div>
         ) : stats?.topCustomers && stats.topCustomers.length > 0 ? (

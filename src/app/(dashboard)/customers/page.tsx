@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   Search,
   Plus,
@@ -72,10 +72,10 @@ interface Customer {
 }
 
 const PAGE_SIZE_OPTIONS = [
-  { value: '10', label: '10 ανά σελίδα' },
-  { value: '20', label: '20 ανά σελίδα' },
-  { value: '50', label: '50 ανά σελίδα' },
-  { value: '100', label: '100 ανά σελίδα' },
+  { value: '10', label: '10 Î±Î½Î¬ ÏƒÎµÎ»Î¯Î´Î±' },
+  { value: '20', label: '20 Î±Î½Î¬ ÏƒÎµÎ»Î¯Î´Î±' },
+  { value: '50', label: '50 Î±Î½Î¬ ÏƒÎµÎ»Î¯Î´Î±' },
+  { value: '100', label: '100 Î±Î½Î¬ ÏƒÎµÎ»Î¯Î´Î±' },
 ];
 
 const CATEGORY_OPTIONS = CUSTOMER_CATEGORIES.map((category) => ({
@@ -95,11 +95,31 @@ const CATEGORY_BADGE_CLASSES: Record<CustomerCategory, string> = {
 };
 
 const VIP_OPTIONS = [
-  { value: 'true', label: 'Μόνο VIP' },
-  { value: 'false', label: 'Μη VIP' },
+  { value: 'true', label: 'ÎœÏŒÎ½Î¿ VIP' },
+  { value: 'false', label: 'ÎœÎ· VIP' },
 ];
 
-// Global selection sentinel — means "all customers matching current filters"
+// Global selection sentinel â€” means "all customers matching current filters"
+const CUSTOMER_SKELETON_ROWS = [
+  'customer-skeleton-1',
+  'customer-skeleton-2',
+  'customer-skeleton-3',
+  'customer-skeleton-4',
+  'customer-skeleton-5',
+] as const;
+
+function getInitialQueryParam(name: string, fallback = ''): string {
+  if (typeof window === 'undefined') return fallback;
+  return new URLSearchParams(window.location.search).get(name) ?? fallback;
+}
+
+function getInitialPositiveIntQueryParam(name: string, fallback: number): number {
+  if (typeof window === 'undefined') return fallback;
+  const rawValue = new URLSearchParams(window.location.search).get(name);
+  const parsed = rawValue ? Number.parseInt(rawValue, 10) : fallback;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 const ALL_SELECTED = '__ALL__' as const;
 type SelectionState = string[] | typeof ALL_SELECTED;
 
@@ -108,13 +128,12 @@ const SHELL_CUSTOMERS_REFACTOR_ENABLED =
 
 export default function CustomersPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   // --- Search & filter state (initialized from URL) ---
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') ?? '');
-  const [categoryFilter, setCategoryFilter] = useState(searchParams.get('category') ?? '');
-  const [cityFilter, setCityFilter] = useState(searchParams.get('city') ?? '');
-  const [vipFilter, setVipFilter] = useState(searchParams.get('vip') ?? '');
+  const [searchQuery, setSearchQuery] = useState(() => getInitialQueryParam('search'));
+  const [categoryFilter, setCategoryFilter] = useState(() => getInitialQueryParam('category'));
+  const [cityFilter, setCityFilter] = useState(() => getInitialQueryParam('city'));
+  const [vipFilter, setVipFilter] = useState(() => getInitialQueryParam('vip'));
   const [filterOpen, setFilterOpen] = useState(false);
 
   const debouncedSearch = useDebounce(searchQuery, 350);
@@ -125,8 +144,8 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
-    page: parseInt(searchParams.get('page') ?? '1', 10) || 1,
-    limit: parseInt(searchParams.get('limit') ?? '20', 10) || 20,
+    page: getInitialPositiveIntQueryParam('page', 1),
+    limit: getInitialPositiveIntQueryParam('limit', 20),
     total: 0,
     totalPages: 0,
   });
@@ -158,7 +177,7 @@ export default function CustomersPage() {
   const activeFilterCount = [categoryFilter, debouncedCity, vipFilter].filter(Boolean).length;
 
   // -----------------------------------------------------------------------
-  // Core fetch — always server-side with all active filters
+  // Core fetch â€” always server-side with all active filters
   // -----------------------------------------------------------------------
   const fetchCustomers = useCallback(
     async (opts?: {
@@ -203,7 +222,7 @@ export default function CustomersPage() {
           totalPages,
         }));
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Σφάλμα φόρτωσης πελατών');
+        setError(err instanceof Error ? err.message : 'Î£Ï†Î¬Î»Î¼Î± Ï†ÏŒÏÏ„Ï‰ÏƒÎ·Ï‚ Ï€ÎµÎ»Î±Ï„ÏŽÎ½');
       } finally {
         setLoading(false);
       }
@@ -218,14 +237,14 @@ export default function CustomersPage() {
   paginationRef.current = pagination;
 
   // -----------------------------------------------------------------------
-  // Refetch whenever search/filters change — always reset to page 1
+  // Refetch whenever search/filters change â€” always reset to page 1
   // -----------------------------------------------------------------------
   const filtersKey = `${debouncedSearch}|${categoryFilter}|${debouncedCity}|${vipFilter}`;
   const prevFiltersKey = useRef(filtersKey);
 
   useEffect(() => {
     if (prevFiltersKey.current !== filtersKey) {
-      // Filters changed — reset to page 1
+      // Filters changed â€” reset to page 1
       prevFiltersKey.current = filtersKey;
       setSelectedCustomers([]);
       fetchCustomers({
@@ -255,17 +274,22 @@ export default function CustomersPage() {
 
   // Handle ?new=true param
   useEffect(() => {
-    if (searchParams.get('new') === 'true') {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('new') === 'true') {
       handleCreateCustomer();
-      router.replace('/customers');
+      params.delete('new');
+      const queryString = params.toString();
+      const nextUrl = `/customers${queryString ? `?${queryString}` : ''}`;
+      window.history.replaceState(null, '', nextUrl);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, []);
 
   // -----------------------------------------------------------------------
-  // URL sync — keep URL in sync with current filters/page
+  // URL sync â€” keep URL in sync with current filters/page
   // -----------------------------------------------------------------------
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const params = new URLSearchParams();
     if (debouncedSearch) params.set('search', debouncedSearch);
     if (categoryFilter) params.set('category', categoryFilter);
@@ -274,8 +298,12 @@ export default function CustomersPage() {
     if (pagination.page > 1) params.set('page', String(pagination.page));
     if (pagination.limit !== 20) params.set('limit', String(pagination.limit));
     const qs = params.toString();
-    router.replace(`/customers${qs ? `?${qs}` : ''}`, { scroll: false });
-  }, [debouncedSearch, categoryFilter, debouncedCity, vipFilter, pagination.page, pagination.limit, router]);
+    const nextUrl = `/customers${qs ? `?${qs}` : ''}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (currentUrl !== nextUrl) {
+      window.history.replaceState(null, '', nextUrl);
+    }
+  }, [debouncedSearch, categoryFilter, debouncedCity, vipFilter, pagination.page, pagination.limit]);
 
   // -----------------------------------------------------------------------
   // Keyboard shortcut: "/" focuses search bar
@@ -336,7 +364,7 @@ export default function CustomersPage() {
   // -----------------------------------------------------------------------
   const toggleSelect = (id: string) => {
     if (isGlobalSelect) {
-      // Coming out of global select — select all current page except this one
+      // Coming out of global select â€” select all current page except this one
       setSelectedCustomers(customers.map((c) => c.id).filter((cid) => cid !== id));
     } else {
       setSelectedCustomers((prev) =>
@@ -417,7 +445,7 @@ export default function CustomersPage() {
     setBulkDeleting(true);
     try {
       if (isGlobalSelect) {
-        // Delete all matching current filters — fetch all IDs in batches
+        // Delete all matching current filters â€” fetch all IDs in batches
         let page = 1;
         const idsToDelete: string[] = [];
         while (true) {
@@ -459,7 +487,7 @@ export default function CustomersPage() {
   };
 
   // -----------------------------------------------------------------------
-  // Bulk email — navigate to email page with context
+  // Bulk email â€” navigate to email page with context
   // -----------------------------------------------------------------------
   const handleBulkEmail = () => {
     if (isGlobalSelect) {
@@ -523,11 +551,11 @@ export default function CustomersPage() {
   // Row actions
   // -----------------------------------------------------------------------
   const getRowActions = (customer: Customer) => [
-    { key: 'view', label: 'Προβολή', icon: <Eye className="h-4 w-4" />, onClick: () => handleViewCustomer(customer) },
-    { key: 'edit', label: 'Επεξεργασία', icon: <Edit className="h-4 w-4" />, onClick: () => handleEditCustomer(customer) },
-    { key: 'email', label: 'Αποστολή Email', icon: <Mail className="h-4 w-4" />, onClick: () => handleSendEmail(customer), disabled: !customer.email },
+    { key: 'view', label: 'Î ÏÎ¿Î²Î¿Î»Î®', icon: <Eye className="h-4 w-4" />, onClick: () => handleViewCustomer(customer) },
+    { key: 'edit', label: 'Î•Ï€ÎµÎ¾ÎµÏÎ³Î±ÏƒÎ¯Î±', icon: <Edit className="h-4 w-4" />, onClick: () => handleEditCustomer(customer) },
+    { key: 'email', label: 'Î‘Ï€Î¿ÏƒÏ„Î¿Î»Î® Email', icon: <Mail className="h-4 w-4" />, onClick: () => handleSendEmail(customer), disabled: !customer.email },
     { key: 'divider1', label: '', divider: true },
-    { key: 'delete', label: 'Διαγραφή', icon: <Trash2 className="h-4 w-4" />, onClick: () => handleDeleteClick(customer), danger: true },
+    { key: 'delete', label: 'Î”Î¹Î±Î³ÏÎ±Ï†Î®', icon: <Trash2 className="h-4 w-4" />, onClick: () => handleDeleteClick(customer), danger: true },
   ];
 
   // Display range
@@ -564,8 +592,8 @@ export default function CustomersPage() {
               '!bg-[var(--surface-2)] !border-[var(--border-soft)] !backdrop-blur-none'
           )}
         >
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 p-4 border-b border-white/[0.05]">
+          {CUSTOMER_SKELETON_ROWS.map((skeletonRowId) => (
+            <div key={skeletonRowId} className="flex items-center gap-4 p-4 border-b border-white/[0.05]">
               <GlassSkeleton className="h-10 w-10 rounded-full" />
               <div className="flex-1">
                 <GlassSkeleton className="h-4 w-32 mb-2" />
@@ -598,9 +626,9 @@ export default function CustomersPage() {
         )}
       >
         <div>
-          <h1 className="text-2xl font-bold text-white">Πελάτες</h1>
+          <h1 className="text-2xl font-bold text-white">Î ÎµÎ»Î¬Ï„ÎµÏ‚</h1>
           <p className="text-white/60">
-            Διαχείριση όλων των πελατών σας ({pagination.total} σύνολο)
+            Î”Î¹Î±Ï‡ÎµÎ¯ÏÎ¹ÏƒÎ· ÏŒÎ»Ï‰Î½ Ï„Ï‰Î½ Ï€ÎµÎ»Î±Ï„ÏŽÎ½ ÏƒÎ±Ï‚ ({pagination.total} ÏƒÏÎ½Î¿Î»Î¿)
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -617,16 +645,16 @@ export default function CustomersPage() {
             })}
             disabled={loading}
           >
-            Ανανέωση
+            Î‘Î½Î±Î½Î­Ï‰ÏƒÎ·
           </GlassButton>
           <GlassButton variant="default" leftIcon={<Upload className="h-4 w-4" />} onClick={handleImport}>
-            Εισαγωγή
+            Î•Î¹ÏƒÎ±Î³Ï‰Î³Î®
           </GlassButton>
           <GlassButton variant="default" leftIcon={<Download className="h-4 w-4" />} onClick={handleExport}>
-            Εξαγωγή
+            Î•Î¾Î±Î³Ï‰Î³Î®
           </GlassButton>
           <GlassButton variant="primary" leftIcon={<Plus className="h-4 w-4" />} onClick={handleCreateCustomer}>
-            Νέος Πελάτης
+            ÎÎ­Î¿Ï‚ Î ÎµÎ»Î¬Ï„Î·Ï‚
           </GlassButton>
         </div>
       </div>
@@ -643,7 +671,7 @@ export default function CustomersPage() {
           <div className="flex items-center justify-between">
             <p className="text-red-400">{error}</p>
             <GlassButton size="sm" onClick={() => fetchCustomers({ page: pagination.page, limit: pagination.limit })}>
-              Δοκιμή Ξανά
+              Î”Î¿ÎºÎ¹Î¼Î® ÎžÎ±Î½Î¬
             </GlassButton>
           </div>
         </GlassCard>
@@ -656,7 +684,7 @@ export default function CustomersPage() {
           <div className="relative flex-1">
             <GlassInput
               ref={searchInputRef}
-              placeholder="Αναζήτηση πελατών... (πατήστε / για εστίαση)"
+              placeholder="Î‘Î½Î±Î¶Î®Ï„Î·ÏƒÎ· Ï€ÎµÎ»Î±Ï„ÏŽÎ½... (Ï€Î±Ï„Î®ÏƒÏ„Îµ / Î³Î¹Î± ÎµÏƒÏ„Î¯Î±ÏƒÎ·)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={cn(
@@ -673,7 +701,7 @@ export default function CustomersPage() {
               <button
                 onClick={() => setSearchQuery('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
-                aria-label="Καθαρισμός αναζήτησης"
+                aria-label="ÎšÎ±Î¸Î±ÏÎ¹ÏƒÎ¼ÏŒÏ‚ Î±Î½Î±Î¶Î®Ï„Î·ÏƒÎ·Ï‚"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -692,14 +720,14 @@ export default function CustomersPage() {
               onClick={toggleSelectAll}
               disabled={customers.length === 0}
             >
-              {isGlobalSelect || allPageSelected ? 'Αποεπιλογή Όλων' : 'Επιλέξτε Όλους'}
+              {isGlobalSelect || allPageSelected ? 'Î‘Ï€Î¿ÎµÏ€Î¹Î»Î¿Î³Î® ÎŒÎ»Ï‰Î½' : 'Î•Ï€Î¹Î»Î­Î¾Ï„Îµ ÎŒÎ»Î¿Ï…Ï‚'}
             </GlassButton>
             <GlassButton
               variant={filterOpen || activeFilterCount > 0 ? 'primary' : 'default'}
               leftIcon={<Filter className="h-4 w-4" />}
               onClick={() => setFilterOpen((o) => !o)}
             >
-              Φίλτρα{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              Î¦Î¯Î»Ï„ÏÎ±{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
             </GlassButton>
           </div>
         </div>
@@ -717,20 +745,22 @@ export default function CustomersPage() {
             <div className="flex flex-wrap items-end gap-4">
               {/* Category */}
               <div className="flex-1 min-w-[160px]">
-                <label className="block text-xs text-white/50 mb-1.5">Κατηγορία</label>
+                <label htmlFor="customers-filter-category" className="block text-xs text-white/50 mb-1.5">ÎšÎ±Ï„Î·Î³Î¿ÏÎ¯Î±</label>
                 <GlassSelect
+                  id="customers-filter-category"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
                   options={CATEGORY_OPTIONS}
-                  placeholder="Όλες οι κατηγορίες"
+                  placeholder="ÎŒÎ»ÎµÏ‚ Î¿Î¹ ÎºÎ±Ï„Î·Î³Î¿ÏÎ¯ÎµÏ‚"
                 />
               </div>
 
               {/* City */}
               <div className="flex-1 min-w-[160px]">
-                <label className="block text-xs text-white/50 mb-1.5">Πόλη</label>
+                <label htmlFor="customers-filter-city" className="block text-xs text-white/50 mb-1.5">Î ÏŒÎ»Î·</label>
                 <GlassInput
-                  placeholder="π.χ. Αθήνα"
+                  id="customers-filter-city"
+                  placeholder="Ï€.Ï‡. Î‘Î¸Î®Î½Î±"
                   value={cityFilter}
                   onChange={(e) => setCityFilter(e.target.value)}
                 />
@@ -738,12 +768,13 @@ export default function CustomersPage() {
 
               {/* VIP */}
               <div className="flex-1 min-w-[140px]">
-                <label className="block text-xs text-white/50 mb-1.5">VIP</label>
+                <label htmlFor="customers-filter-vip" className="block text-xs text-white/50 mb-1.5">VIP</label>
                 <GlassSelect
+                  id="customers-filter-vip"
                   value={vipFilter}
                   onChange={(e) => setVipFilter(e.target.value)}
                   options={VIP_OPTIONS}
-                  placeholder="Όλοι"
+                  placeholder="ÎŒÎ»Î¿Î¹"
                 />
               </div>
 
@@ -755,7 +786,7 @@ export default function CustomersPage() {
                   leftIcon={<X className="h-3 w-3" />}
                   onClick={clearAllFilters}
                 >
-                  Καθαρισμός
+                  ÎšÎ±Î¸Î±ÏÎ¹ÏƒÎ¼ÏŒÏ‚
                 </GlassButton>
               )}
             </div>
@@ -776,7 +807,7 @@ export default function CustomersPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
               <span className="text-sm text-white/70">
-                {selectedCount} επιλεγμένοι από {pagination.total}
+                {selectedCount} ÎµÏ€Î¹Î»ÎµÎ³Î¼Î­Î½Î¿Î¹ Î±Ï€ÏŒ {pagination.total}
               </span>
               {/* Global select banner */}
               {allPageSelected && !isGlobalSelect && pagination.total > customers.length && (
@@ -788,7 +819,7 @@ export default function CustomersPage() {
                       'text-[var(--accent-primary)] hover:text-[var(--accent-primary-strong)]'
                   )}
                 >
-                  Επιλογή και των {pagination.total} πελατών που ταιριάζουν με τα φίλτρα →
+                  Î•Ï€Î¹Î»Î¿Î³Î® ÎºÎ±Î¹ Ï„Ï‰Î½ {pagination.total} Ï€ÎµÎ»Î±Ï„ÏŽÎ½ Ï€Î¿Ï… Ï„Î±Î¹ÏÎ¹Î¬Î¶Î¿Ï…Î½ Î¼Îµ Ï„Î± Ï†Î¯Î»Ï„ÏÎ± â†’
                 </button>
               )}
             </div>
@@ -797,9 +828,9 @@ export default function CustomersPage() {
                 size="sm"
                 variant="default"
                 leftIcon={<Tag className="h-3 w-3" />}
-                onClick={() => {/* Phase 4c — tag modal, TODO */}}
+                onClick={() => {/* Phase 4c â€” tag modal, TODO */}}
               >
-                Προσθήκη Ετικέτας
+                Î ÏÎ¿ÏƒÎ¸Î®ÎºÎ· Î•Ï„Î¹ÎºÎ­Ï„Î±Ï‚
               </GlassButton>
               <GlassButton
                 size="sm"
@@ -807,7 +838,7 @@ export default function CustomersPage() {
                 leftIcon={<Mail className="h-3 w-3" />}
                 onClick={handleBulkEmail}
               >
-                Αποστολή Email
+                Î‘Ï€Î¿ÏƒÏ„Î¿Î»Î® Email
               </GlassButton>
               <GlassButton
                 size="sm"
@@ -815,7 +846,7 @@ export default function CustomersPage() {
                 leftIcon={<Trash2 className="h-3 w-3" />}
                 onClick={() => setBulkDeleteOpen(true)}
               >
-                Διαγραφή
+                Î”Î¹Î±Î³ÏÎ±Ï†Î®
               </GlassButton>
             </div>
           </div>
@@ -825,7 +856,7 @@ export default function CustomersPage() {
       {/* Search result count hint */}
       {hasActiveSearch && !loading && (
         <p className="text-sm text-white/50">
-          Βρέθηκαν <span className="text-white font-medium">{pagination.total}</span> πελάτες για «{debouncedSearch}»
+          Î’ÏÎ­Î¸Î·ÎºÎ±Î½ <span className="text-white font-medium">{pagination.total}</span> Ï€ÎµÎ»Î¬Ï„ÎµÏ‚ Î³Î¹Î± Â«{debouncedSearch}Â»
         </p>
       )}
 
@@ -840,18 +871,18 @@ export default function CustomersPage() {
         {customers.length === 0 && !loading ? (
           <GlassEmptyState
             icon={hasActiveSearch || activeFilterCount > 0 ? <Search className="h-8 w-8" /> : <Plus className="h-8 w-8" />}
-            title={hasActiveSearch || activeFilterCount > 0 ? "Δεν βρέθηκαν πελάτες" : "Δεν υπάρχουν πελάτες ακόμα"}
+            title={hasActiveSearch || activeFilterCount > 0 ? "Î”ÎµÎ½ Î²ÏÎ­Î¸Î·ÎºÎ±Î½ Ï€ÎµÎ»Î¬Ï„ÎµÏ‚" : "Î”ÎµÎ½ Ï…Ï€Î¬ÏÏ‡Î¿Ï…Î½ Ï€ÎµÎ»Î¬Ï„ÎµÏ‚ Î±ÎºÏŒÎ¼Î±"}
             description={
               hasActiveSearch
-                ? `Κανένας πελάτης για «${debouncedSearch}». Δοκιμάστε άλλους όρους αναζήτησης.`
+                ? `ÎšÎ±Î½Î­Î½Î±Ï‚ Ï€ÎµÎ»Î¬Ï„Î·Ï‚ Î³Î¹Î± Â«${debouncedSearch}Â». Î”Î¿ÎºÎ¹Î¼Î¬ÏƒÏ„Îµ Î¬Î»Î»Î¿Ï…Ï‚ ÏŒÏÎ¿Ï…Ï‚ Î±Î½Î±Î¶Î®Ï„Î·ÏƒÎ·Ï‚.`
                 : activeFilterCount > 0
-                ? "Κανένας πελάτης δεν ταιριάζει με τα ενεργά φίλτρα."
-                : "Ξεκινήστε προσθέτοντας τον πρώτο σας πελάτη"
+                ? "ÎšÎ±Î½Î­Î½Î±Ï‚ Ï€ÎµÎ»Î¬Ï„Î·Ï‚ Î´ÎµÎ½ Ï„Î±Î¹ÏÎ¹Î¬Î¶ÎµÎ¹ Î¼Îµ Ï„Î± ÎµÎ½ÎµÏÎ³Î¬ Ï†Î¯Î»Ï„ÏÎ±."
+                : "ÎžÎµÎºÎ¹Î½Î®ÏƒÏ„Îµ Ï€ÏÎ¿ÏƒÎ¸Î­Ï„Î¿Î½Ï„Î±Ï‚ Ï„Î¿Î½ Ï€ÏÏŽÏ„Î¿ ÏƒÎ±Ï‚ Ï€ÎµÎ»Î¬Ï„Î·"
             }
             action={
               hasActiveSearch || activeFilterCount > 0
-                ? { label: 'Καθαρισμός Φίλτρων', onClick: clearAllFilters }
-                : { label: 'Νέος Πελάτης', onClick: handleCreateCustomer }
+                ? { label: 'ÎšÎ±Î¸Î±ÏÎ¹ÏƒÎ¼ÏŒÏ‚ Î¦Î¯Î»Ï„ÏÏ‰Î½', onClick: clearAllFilters }
+                : { label: 'ÎÎ­Î¿Ï‚ Î ÎµÎ»Î¬Ï„Î·Ï‚', onClick: handleCreateCustomer }
             }
           />
         ) : (
@@ -862,7 +893,7 @@ export default function CustomersPage() {
               SHELL_CUSTOMERS_REFACTOR_ENABLED && 'rounded-xl border border-[var(--border-soft)]'
             )}
           >
-            <table className="w-full" role="table" aria-label="Λίστα πελατών">
+            <table className="w-full" role="table" aria-label="Î›Î¯ÏƒÏ„Î± Ï€ÎµÎ»Î±Ï„ÏŽÎ½">
               <thead>
                 <tr
                   className={cn(
@@ -879,25 +910,25 @@ export default function CustomersPage() {
                     />
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Πελάτης
+                    Î ÎµÎ»Î¬Ï„Î·Ï‚
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Επικοινωνία
+                    Î•Ï€Î¹ÎºÎ¿Î¹Î½Ï‰Î½Î¯Î±
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Πόλη
+                    Î ÏŒÎ»Î·
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Κατηγορία
+                    ÎšÎ±Ï„Î·Î³Î¿ÏÎ¯Î±
                   </th>
                   <th className="px-4 py-4 text-left text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Ετικέτες
+                    Î•Ï„Î¹ÎºÎ­Ï„ÎµÏ‚
                   </th>
                   <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Τζίρος
+                    Î¤Î¶Î¯ÏÎ¿Ï‚
                   </th>
                   <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-white/50">
-                    Ενέργειες
+                    Î•Î½Î­ÏÎ³ÎµÎ¹ÎµÏ‚
                   </th>
                 </tr>
               </thead>
@@ -944,7 +975,7 @@ export default function CustomersPage() {
                               <span className="font-medium text-white">
                                 {customer.firstName} {customer.lastName}
                               </span>
-                              {customer.isVip && <span className="text-amber-400">⭐</span>}
+                              {customer.isVip && <span className="text-amber-400">â­</span>}
                             </div>
                             {customer.company && (
                               <span className="text-sm text-white/50">{customer.company}</span>
@@ -1038,11 +1069,11 @@ export default function CustomersPage() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <p className="text-sm text-white/60">
-              Εμφάνιση{' '}
-              <span className="font-medium text-white">{startItem}–{endItem}</span>{' '}
-              από{' '}
+              Î•Î¼Ï†Î¬Î½Î¹ÏƒÎ·{' '}
+              <span className="font-medium text-white">{startItem}â€“{endItem}</span>{' '}
+              Î±Ï€ÏŒ{' '}
               <span className="font-medium text-white">{pagination.total}</span>{' '}
-              πελάτες
+              Ï€ÎµÎ»Î¬Ï„ÎµÏ‚
             </p>
             <div className="w-40">
               <GlassSelect
@@ -1060,7 +1091,7 @@ export default function CustomersPage() {
               onClick={() => handlePageChange(pagination.page - 1)}
               leftIcon={<ChevronLeft className="h-4 w-4" />}
             >
-              Προηγούμενο
+              Î ÏÎ¿Î·Î³Î¿ÏÎ¼ÎµÎ½Î¿
             </GlassButton>
             <div className="flex items-center gap-1 px-2">
               {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
@@ -1099,7 +1130,7 @@ export default function CustomersPage() {
               onClick={() => handlePageChange(pagination.page + 1)}
               rightIcon={<ChevronRight className="h-4 w-4" />}
             >
-              Επόμενο
+              Î•Ï€ÏŒÎ¼ÎµÎ½Î¿
             </GlassButton>
           </div>
         </div>
@@ -1119,9 +1150,9 @@ export default function CustomersPage() {
         isOpen={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={handleDeleteConfirm}
-        title="Διαγραφή Πελάτη"
-        description={`Είστε σίγουροι ότι θέλετε να διαγράψετε τον πελάτη "${customerToDelete?.firstName} ${customerToDelete?.lastName}"? Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.`}
-        confirmText="Διαγραφή"
+        title="Î”Î¹Î±Î³ÏÎ±Ï†Î® Î ÎµÎ»Î¬Ï„Î·"
+        description={`Î•Î¯ÏƒÏ„Îµ ÏƒÎ¯Î³Î¿Ï…ÏÎ¿Î¹ ÏŒÏ„Î¹ Î¸Î­Î»ÎµÏ„Îµ Î½Î± Î´Î¹Î±Î³ÏÎ¬ÏˆÎµÏ„Îµ Ï„Î¿Î½ Ï€ÎµÎ»Î¬Ï„Î· "${customerToDelete?.firstName} ${customerToDelete?.lastName}"? Î‘Ï…Ï„Î® Î· ÎµÎ½Î­ÏÎ³ÎµÎ¹Î± Î´ÎµÎ½ Î¼Ï€Î¿ÏÎµÎ¯ Î½Î± Î±Î½Î±Î¹ÏÎµÎ¸ÎµÎ¯.`}
+        confirmText="Î”Î¹Î±Î³ÏÎ±Ï†Î®"
         variant="danger"
         loading={deleting}
       />
@@ -1131,16 +1162,18 @@ export default function CustomersPage() {
         isOpen={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
         onConfirm={handleBulkDeleteConfirm}
-        title="Μαζική Διαγραφή Πελατών"
+        title="ÎœÎ±Î¶Î¹ÎºÎ® Î”Î¹Î±Î³ÏÎ±Ï†Î® Î ÎµÎ»Î±Ï„ÏŽÎ½"
         description={
           isGlobalSelect
-            ? `Είστε σίγουροι ότι θέλετε να διαγράψετε ΟΛΟΥΣ τους ${pagination.total} πελάτες που ταιριάζουν με τα τρέχοντα φίλτρα; Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.`
-            : `Είστε σίγουροι ότι θέλετε να διαγράψετε ${selectedCount} πελάτες; Αυτή η ενέργεια δεν μπορεί να αναιρεθεί.`
+            ? `Î•Î¯ÏƒÏ„Îµ ÏƒÎ¯Î³Î¿Ï…ÏÎ¿Î¹ ÏŒÏ„Î¹ Î¸Î­Î»ÎµÏ„Îµ Î½Î± Î´Î¹Î±Î³ÏÎ¬ÏˆÎµÏ„Îµ ÎŸÎ›ÎŸÎ¥Î£ Ï„Î¿Ï…Ï‚ ${pagination.total} Ï€ÎµÎ»Î¬Ï„ÎµÏ‚ Ï€Î¿Ï… Ï„Î±Î¹ÏÎ¹Î¬Î¶Î¿Ï…Î½ Î¼Îµ Ï„Î± Ï„ÏÎ­Ï‡Î¿Î½Ï„Î± Ï†Î¯Î»Ï„ÏÎ±; Î‘Ï…Ï„Î® Î· ÎµÎ½Î­ÏÎ³ÎµÎ¹Î± Î´ÎµÎ½ Î¼Ï€Î¿ÏÎµÎ¯ Î½Î± Î±Î½Î±Î¹ÏÎµÎ¸ÎµÎ¯.`
+            : `Î•Î¯ÏƒÏ„Îµ ÏƒÎ¯Î³Î¿Ï…ÏÎ¿Î¹ ÏŒÏ„Î¹ Î¸Î­Î»ÎµÏ„Îµ Î½Î± Î´Î¹Î±Î³ÏÎ¬ÏˆÎµÏ„Îµ ${selectedCount} Ï€ÎµÎ»Î¬Ï„ÎµÏ‚; Î‘Ï…Ï„Î® Î· ÎµÎ½Î­ÏÎ³ÎµÎ¹Î± Î´ÎµÎ½ Î¼Ï€Î¿ÏÎµÎ¯ Î½Î± Î±Î½Î±Î¹ÏÎµÎ¸ÎµÎ¯.`
         }
-        confirmText={`Διαγραφή ${selectedCount} πελατών`}
+        confirmText={`Î”Î¹Î±Î³ÏÎ±Ï†Î® ${selectedCount} Ï€ÎµÎ»Î±Ï„ÏŽÎ½`}
         variant="danger"
         loading={bulkDeleting}
       />
     </div>
   );
 }
+
+

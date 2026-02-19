@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { MotionConfig } from 'framer-motion';
+import Script from 'next/script';
 import { SessionProvider } from '@/components/providers/session-provider';
 import './globals.css';
 
@@ -50,25 +52,23 @@ export default function RootLayout({
   return (
     <html lang="el" className="dark" suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (() => {
-                try {
-                  const raw = localStorage.getItem('kktires-ui');
-                  const parsed = raw ? JSON.parse(raw) : null;
-                  const theme = parsed?.state?.theme;
-                  const t = theme === 'light' || theme === 'dark' ? theme : 'dark';
-                  document.documentElement.setAttribute('data-theme', t);
-                  document.documentElement.classList.remove('light', 'dark');
-                  document.documentElement.classList.add(t);
-                } catch (_) {
-                  // no-op
-                }
-              })();
-            `,
-          }}
-        />
+        <Script id="theme-bootstrap" strategy="beforeInteractive">
+          {`
+            (() => {
+              try {
+                const raw = localStorage.getItem('kktires-ui');
+                const parsed = raw ? JSON.parse(raw) : null;
+                const theme = parsed?.state?.theme;
+                const t = theme === 'light' || theme === 'dark' ? theme : 'dark';
+                document.documentElement.setAttribute('data-theme', t);
+                document.documentElement.classList.remove('light', 'dark');
+                document.documentElement.classList.add(t);
+              } catch (_) {
+                // no-op
+              }
+            })();
+          `}
+        </Script>
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
@@ -76,26 +76,26 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <SessionProvider>
-          {children}
-        </SessionProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                  navigator.serviceWorker.register('/sw.js')
-                    .then((registration) => {
-                      console.log('SW registered:', registration.scope);
-                    })
-                    .catch((error) => {
-                      console.log('SW registration failed:', error);
-                    });
-                });
-              }
-            `,
-          }}
-        />
+        <MotionConfig reducedMotion="user">
+          <SessionProvider>
+            {children}
+          </SessionProvider>
+        </MotionConfig>
+        <Script id="service-worker-register" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                  .then((registration) => {
+                    console.log('SW registered:', registration.scope);
+                  })
+                  .catch((error) => {
+                    console.log('SW registration failed:', error);
+                  });
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );

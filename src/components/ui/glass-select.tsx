@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef } from 'react';
+import { forwardRef, useId } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 
@@ -23,19 +23,24 @@ const GlassSelect = forwardRef<HTMLSelectElement, GlassSelectProps>(
       options,
       placeholder = 'Επιλέξτε...',
       disabled,
+      id,
       ...props
     },
     ref
   ) => {
+    const generatedId = useId();
+    const selectId = id ?? generatedId;
+
     return (
       <div className="w-full">
         {label && (
-          <label className="mb-2 block text-sm font-medium text-white/70">
+          <label htmlFor={selectId} className="mb-2 block text-sm font-medium text-white/70">
             {label}
           </label>
         )}
         <div className="relative">
           <select
+            id={selectId}
             ref={ref}
             disabled={disabled}
             className={cn(
@@ -78,4 +83,3 @@ const GlassSelect = forwardRef<HTMLSelectElement, GlassSelectProps>(
 GlassSelect.displayName = 'GlassSelect';
 
 export { GlassSelect };
-

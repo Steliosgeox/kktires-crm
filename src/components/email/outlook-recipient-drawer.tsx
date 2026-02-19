@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import useSWR from 'swr';
 import {
   X,
   Search,
@@ -35,6 +36,22 @@ interface SegmentData {
   customerCount: number;
 }
 
+type LocationsResponse = {
+  cities?: { name: string; count: number }[];
+};
+
+type TagsResponse = {
+  tags?: TagData[];
+};
+
+type SegmentsResponse = {
+  segments?: SegmentData[];
+};
+
+type RecipientsCountResponse = {
+  count?: number;
+};
+
 interface OutlookRecipientDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -44,6 +61,14 @@ interface OutlookRecipientDrawerProps {
 
 type TabType = 'cities' | 'tags' | 'segments';
 
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Request failed for ${url}: ${response.status} ${response.statusText}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 export function OutlookRecipientDrawer({
   isOpen,
   onClose,
@@ -52,93 +77,55 @@ export function OutlookRecipientDrawer({
 }: OutlookRecipientDrawerProps) {
   const [activeTab, setActiveTab] = useState<TabType>('cities');
   const [searchQuery, setSearchQuery] = useState('');
-  const [cities, setCities] = useState<CityData[]>([]);
-  const [tags, setTags] = useState<TagData[]>([]);
-  const [segments, setSegments] = useState<SegmentData[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
 
-  // Fetch data
-  useEffect(() => {
-    if (!isOpen) return;
+  const { data: locationsData, isLoading: locationsLoading } = useSWR<LocationsResponse>(
+    isOpen ? '/api/customers/locations' : null,
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
 
-    const abortController = new AbortController();
-    
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [citiesRes, tagsRes, segmentsRes] = await Promise.all([
-          fetch('/api/customers/locations', { signal: abortController.signal }),
-          fetch('/api/tags', { signal: abortController.signal }),
-          fetch('/api/segments', { signal: abortController.signal }),
-        ]);
+  const { data: tagsData, isLoading: tagsLoading } = useSWR<TagsResponse>(
+    isOpen ? '/api/tags' : null,
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
 
-        if (citiesRes.ok) {
-          const data = await citiesRes.json();
-          setCities(data.cities?.map((c: { name: string; count: number }) => ({
-            city: c.name,
-            count: c.count,
-          })) || []);
-        }
+  const { data: segmentsData, isLoading: segmentsLoading } = useSWR<SegmentsResponse>(
+    isOpen ? '/api/segments' : null,
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
 
-        if (tagsRes.ok) {
-          const data = await tagsRes.json();
-          setTags(data.tags || []);
-        }
-
-        if (segmentsRes.ok) {
-          const data = await segmentsRes.json();
-          setSegments(data.segments || []);
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error fetching recipient data:', error);
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-    
-    return () => abortController.abort();
-  }, [isOpen]);
-
-  // Calculate recipient count when filters change
-  useEffect(() => {
-    if (!filters.cities.length && !filters.tags.length && !filters.segments.length) {
-      setRecipientCount(null);
-      return;
+  const recipientCountKey = useMemo(() => {
+    if (!isOpen || (!filters.cities.length && !filters.tags.length && !filters.segments.length)) {
+      return null;
     }
+    const params = new URLSearchParams();
+    if (filters.cities.length) params.set('cities', filters.cities.join(','));
+    if (filters.tags.length) params.set('tags', filters.tags.join(','));
+    if (filters.segments.length) params.set('segments', filters.segments.join(','));
+    return `/api/recipients/count?${params.toString()}`;
+  }, [filters.cities, filters.tags, filters.segments, isOpen]);
 
-    const abortController = new AbortController();
-    
-    const fetchCount = async () => {
-      try {
-        const params = new URLSearchParams();
-        if (filters.cities.length) params.set('cities', filters.cities.join(','));
-        if (filters.tags.length) params.set('tags', filters.tags.join(','));
-        if (filters.segments.length) params.set('segments', filters.segments.join(','));
+  const { data: recipientCountData } = useSWR<RecipientsCountResponse>(
+    recipientCountKey,
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
 
-        const response = await fetch(`/api/recipients/count?${params}`, { 
-          signal: abortController.signal 
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setRecipientCount(data.count);
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Error fetching recipient count:', error);
-        }
-      }
-    };
-
-    fetchCount();
-    
-    return () => abortController.abort();
-  }, [filters]);
+  const cities = useMemo(
+    () =>
+      (locationsData?.cities || []).map((innerCity) => ({
+        city: innerCity.name,
+        count: innerCity.count,
+      })),
+    [locationsData]
+  );
+  const tags = tagsData?.tags || [];
+  const segments = segmentsData?.segments || [];
+  const loading = locationsLoading || tagsLoading || segmentsLoading;
+  const recipientCount = recipientCountData?.count ?? null;
 
   const toggleCity = (city: string) => {
     const newCities = filters.cities.includes(city)
@@ -193,7 +180,9 @@ export function OutlookRecipientDrawer({
   return (
     <>
       {/* Backdrop */}
-      <div 
+      <button
+        type="button"
+        aria-label="Κλείσιμο επιλογής παραληπτών"
         className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm outlook-animate-fade"
         onClick={onClose}
       />

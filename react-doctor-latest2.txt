@@ -1,0 +1,292 @@
+react-doctor v0.0.26
+
+[2mScanning c:\Users\Stelios\kktires-web...[22m
+
+- Detecting framework. Found [36mNext.js[39m.
+[32m√[39m Detecting framework. Found [36mNext.js[39m.
+- Detecting React version. Found [36mReact 19.2.4[39m.
+[32m√[39m Detecting React version. Found [36mReact 19.2.4[39m.
+- Detecting language. Found [36mTypeScript[39m.
+[32m√[39m Detecting language. Found [36mTypeScript[39m.
+- Detecting React Compiler. Not found.
+[32m√[39m Detecting React Compiler. Not found.
+- Found [36m0[39m source files.
+[32m√[39m Found [36m0[39m source files.
+- Loaded [36mreact-doctor config[39m.
+[32m√[39m Loaded [36mreact-doctor config[39m.
+
+- Running lint checks...
+- Running lint checks.
+[32m√[39m Running lint checks.
+- Detecting dead code...
+[32m√[39m Detecting dead code.
+  [33m⚠[39m Component "AutomationBuilder" is 305 lines — consider breaking it into smaller focused components[33m (18)[39m
+[2m    Extract logical sections into focused components: `<UserHeader />`, `<UserActions />`, etc.[22m
+[2m    src/components/email/automation-builder.tsx: 141[22m
+[2m    src/app/(dashboard)/import/page.tsx: 36[22m
+[2m    src/app/(dashboard)/segments/page.tsx: 62[22m
+[2m    src/app/(dashboard)/tasks/page.tsx: 144[22m
+[2m    src/app/(dashboard)/customers/page.tsx: 109[22m
+[2m    src/app/(dashboard)/tags/page.tsx: 37[22m
+[2m    src/app/(dashboard)/map/page.tsx: 86[22m
+[2m    src/app/(dashboard)/leads/page.tsx: 60[22m
+[2m    src/components/email/template-builder.tsx: 61[22m
+[2m    src/components/email/rich-text-editor.tsx: 24[22m
+[2m    src/app/(dashboard)/migrate/page.tsx: 34[22m
+[2m    src/app/(dashboard)/email/page.tsx: 87[22m
+[2m    src/components/email/recipient-selector.tsx: 67[22m
+[2m    src/app/(dashboard)/settings/page.tsx: 89[22m
+[2m    src/components/email/outlook-recipient-drawer.tsx: 72[22m
+[2m    src/components/email/outlook-list.tsx: 78[22m
+[2m    src/components/email/outlook-editor.tsx: 109[22m
+[2m    src/components/email/campaign-analytics.tsx: 52[22m
+
+  [33m⚠[39m Default prop value [] creates a new array reference every render — extract to a module-level constant[33m (3)[39m
+[2m    Move to module scope: `const EMPTY_ITEMS: Item[] = []` then use as the default value[22m
+[2m    src/components/email/automation-builder.tsx: 143, 144[22m
+[2m    src/components/email/template-builder.tsx: 61[22m
+
+  [33m⚠[39m Array index "index" used as key — causes bugs when list is reordered or filtered[33m (23)[39m
+[2m    Use a stable unique identifier: `key={item.id}` or `key={item.slug}` — index keys break on reorder/filter[22m
+[2m    src/components/email/automation-builder.tsx: 211, 237, 263, 289[22m
+[2m    src/app/(dashboard)/import/page.tsx: 303, 383, 477[22m
+[2m    src/app/(dashboard)/segments/page.tsx: 329, 432, 500[22m
+[2m    src/app/(dashboard)/page.tsx: 236, 275[22m
+[2m    src/app/(dashboard)/tasks/page.tsx: 392[22m
+[2m    src/app/(dashboard)/customers/page.tsx: 568[22m
+[2m    src/app/(dashboard)/tags/page.tsx: 383[22m
+[2m    src/app/(dashboard)/map/page.tsx: 650[22m
+[2m    src/app/(dashboard)/statistics/page.tsx: 223, 262, 276, 311[22m
+[2m    src/components/email/outlook-list.tsx: 234[22m
+[2m    src/components/ui/glass-avatar.tsx: 87[22m
+[2m    src/components/email/campaign-analytics.tsx: 91[22m
+
+  [33m⚠[39m Import "m" with LazyMotion instead of "motion" — saves ~30kb in bundle size[33m (13)[39m
+[2m    Use `import { LazyMotion, m } from "framer-motion"` with `domAnimation` features — saves ~30kb[22m
+[2m    src/app/(dashboard)/import/page.tsx: 4[22m
+[2m    src/components/ui/glass-tooltip.tsx: 4[22m
+[2m    src/app/(dashboard)/segments/page.tsx: 4[22m
+[2m    src/components/ui/glass-toast.tsx: 4[22m
+[2m    src/components/layout/sidebar.tsx: 5[22m
+[2m    src/components/layout/command-palette.tsx: 5[22m
+[2m    src/components/ui/glass-tabs.tsx: 4[22m
+[2m    src/components/ui/glass-progress.tsx: 3[22m
+[2m    src/components/ui/glass-modal.tsx: 5[22m
+[2m    src/components/ui/glass-dropdown.tsx: 4[22m
+[2m    src/app/(dashboard)/tags/page.tsx: 4[22m
+[2m    src/app/login/page.tsx: 8[22m
+[2m    src/app/(dashboard)/export/page.tsx: 4[22m
+
+  [33m⚠[39m Component "ImportPage" has 7 useState calls — consider useReducer for related state[33m (13)[39m
+[2m    Group related state: `const [state, dispatch] = useReducer(reducer, { field1, field2, ... })`[22m
+[2m    src/app/(dashboard)/import/page.tsx: 36[22m
+[2m    src/app/(dashboard)/segments/page.tsx: 62[22m
+[2m    src/app/(dashboard)/tasks/page.tsx: 144[22m
+[2m    src/app/(dashboard)/customers/page.tsx: 109[22m
+[2m    src/app/(dashboard)/tags/page.tsx: 37[22m
+[2m    src/app/(dashboard)/map/page.tsx: 86[22m
+[2m    src/app/(dashboard)/leads/page.tsx: 60[22m
+[2m    src/components/email/template-builder.tsx: 61[22m
+[2m    src/app/(dashboard)/migrate/page.tsx: 34[22m
+[2m    src/app/(dashboard)/email/page.tsx: 87[22m
+[2m    src/app/(dashboard)/settings/page.tsx: 89[22m
+[2m    src/components/email/outlook-editor.tsx: 135[22m
+[2m    src/app/(dashboard)/export/page.tsx: 32[22m
+
+  [33m⚠[39m 3 setState calls in a single useEffect — consider using useReducer or deriving state[33m (3)[39m
+[2m    Combine into useReducer: `const [state, dispatch] = useReducer(reducer, initialState)`[22m
+[2m    src/components/customers/customer-modal.tsx: 71[22m
+[2m    src/app/(dashboard)/map/page.tsx: 126[22m
+[2m    src/app/(dashboard)/settings/page.tsx: 172[22m
+
+  [33m⚠[39m A form label must be associated with a control.[33m (20)[39m
+[2m    Either give the label a `htmlFor` attribute with the id of the associated control, or wrap the label around the control.[22m
+[2m    src/app/(dashboard)/segments/page.tsx: 281, 292, 305[22m
+[2m    src/app/(dashboard)/tasks/page.tsx: 483[22m
+[2m    src/app/(dashboard)/customers/page.tsx: 720, 731, 741[22m
+[2m    src/app/(dashboard)/tags/page.tsx: 227, 238, 256, 322, 332, 350[22m
+[2m    src/app/(dashboard)/leads/page.tsx: 474[22m
+[2m    src/components/email/template-builder.tsx: 437, 475, 502[22m
+[2m    src/app/(dashboard)/settings/page.tsx: 614[22m
+[2m    src/components/email/outlook-editor.tsx: 695, 714[22m
+
+  [33m⚠[39m The `autoFocus` attribute is found here, which can cause usability issues for sighted and non-sighted users.
+[2m    Remove the `autoFocus` attribute.[22m
+[2m    src/components/layout/command-palette.tsx: 160[22m
+
+  [33m⚠[39m useEffect simulating an event handler — move logic to an actual event handler instead
+[2m    Move the conditional logic into onClick, onChange, or onSubmit handlers directly[22m
+[2m    src/components/layout/command-palette.tsx: 95[22m
+
+  [33m⚠[39m useState initialized from prop "defaultValue" — if this value should stay in sync with the prop, derive it during render instead[33m (3)[39m
+[2m    Remove useState and compute the value inline: `const value = transform(propName)`[22m
+[2m    src/components/ui/glass-tabs.tsx: 35[22m
+[2m    src/components/email/template-builder.tsx: 62, 63[22m
+
+  [33m⚠[39m Enforce a clickable non-interactive element has at least one keyboard event listener.[33m (6)[39m
+[2m    Visible, non-interactive elements with click handlers must have one of `keyup`, `keydown`, or `keypress` listener.[22m
+[2m    src/components/ui/glass-dropdown.tsx: 49[22m
+[2m    src/components/email/template-builder.tsx: 271[22m
+[2m    src/components/email/outlook-recipient-drawer.tsx: 183[22m
+[2m    src/components/email/outlook-list.tsx: 135, 271[22m
+[2m    src/components/email/outlook-editor.tsx: 1409[22m
+
+  [33m⚠[39m Static HTML elements with event handlers require a role.[33m (8)[39m
+[2m    Add a role attribute to this element, or use a semantic HTML element instead.[22m
+[2m    src/components/ui/glass-dropdown.tsx: 49[22m
+[2m    src/components/email/template-builder.tsx: 271[22m
+[2m    src/components/email/outlook-recipient-drawer.tsx: 183[22m
+[2m    src/components/email/outlook-list.tsx: 135, 271[22m
+[2m    src/components/email/outlook-layout.tsx: 43, 77[22m
+[2m    src/components/email/outlook-editor.tsx: 1409[22m
+
+  [33m⚠[39m useSearchParams() requires a <Suspense> boundary — without one, the entire page bails out to client-side rendering[33m (5)[39m
+[2m    Wrap the component using useSearchParams: `<Suspense fallback={<Skeleton />}><SearchComponent /></Suspense>`[22m
+[2m    src/app/(dashboard)/tasks/page.tsx: 146[22m
+[2m    src/app/(dashboard)/customers/page.tsx: 111[22m
+[2m    src/app/(dashboard)/leads/page.tsx: 62[22m
+[2m    src/app/(dashboard)/settings/page.tsx: 90[22m
+[2m    src/app/login/page.tsx: 12[22m
+
+  [33m⚠[39m Client-side redirect in useEffect — use redirect() in a server component or middleware instead[33m (5)[39m
+[2m    Use `redirect('/path')` from 'next/navigation' in a Server Component, or handle in middleware[22m
+[2m    src/app/(dashboard)/tasks/page.tsx: 171[22m
+[2m    src/app/(dashboard)/customers/page.tsx: 260, 277[22m
+[2m    src/app/(dashboard)/leads/page.tsx: 91[22m
+[2m    src/app/login/page.tsx: 22[22m
+
+  [33m⚠[39m Use next/image instead of <img> — provides automatic optimization, lazy loading, and responsive srcset
+[2m    `import Image from 'next/image'` — provides automatic WebP/AVIF, lazy loading, and responsive srcset[22m
+[2m    src/components/email/template-builder.tsx: 293[22m
+
+  [33m⚠[39m Unknown property found
+[2m    Remove unknown property[22m
+[2m    src/components/email/rich-text-editor.tsx: 355[22m
+
+  [33m⚠[39m useEffect(setState, []) on mount causes a flash — consider useSyncExternalStore or suppressHydrationWarning
+[2m    Use `useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)` or add `suppressHydrationWarning` to the element[22m
+[2m    src/components/email/rich-text-editor.tsx: 37[22m
+
+  [33m⚠[39m next/image with fill but no sizes — the browser downloads the largest image. Add a sizes attribute for responsive behavior
+[2m    Add sizes for responsive behavior: `sizes="(max-width: 768px) 100vw, 50vw"` matching your layout breakpoints[22m
+[2m    src/components/ui/glass-avatar.tsx: 57[22m
+
+  [33m⚠[39m Do not use `dangerouslySetInnerHTML` prop[33m (3)[39m
+[2m    `dangerouslySetInnerHTML` is a way to inject HTML into your React component. This is dangerous because it can easily lead to XSS vulnerabilities.[22m
+[2m    src/components/email/outlook-editor.tsx: 1401[22m
+[2m    src/app/layout.tsx: 55, 86[22m
+
+  [33m⚠[39m Use next/script <Script> instead of <script> — provides loading strategy optimization and deferred loading[33m (2)[39m
+[2m    `import Script from "next/script"` — use `strategy="afterInteractive"` for analytics or `"lazyOnload"` for widgets[22m
+[2m    src/app/layout.tsx: 54, 85[22m
+
+  [33m⚠[39m Use next/link instead of <a> for internal links — enables client-side navigation and prefetching
+[2m    `import Link from 'next/link'` — enables client-side navigation, prefetching, and preserves scroll position[22m
+[2m    src/app/unsubscribe/page.tsx: 35[22m
+
+  [33m⚠[39m useState(map()) calls initializer on every render — use useState(() => map()) for lazy initialization
+[2m    Wrap in an arrow function so it only runs once: `useState(() => expensiveComputation())`[22m
+[2m    src/app/(dashboard)/export/page.tsx: 34[22m
+
+  [33m⚠[39m Unused file[33m (28)[39m
+[2m    This file is not imported by any other file in the project.[22m
+[2m    drizzle.config.ts[22m
+[2m    public\sw.js[22m
+[2m    scripts\apply-migrations-batch.ts[22m
+[2m    scripts\apply-new-migrations.ts[22m
+[2m    scripts\check-data.ts[22m
+[2m    scripts\check-db-state.ts[22m
+[2m    scripts\diagnose-campaign.ts[22m
+[2m    scripts\fast-migrate.js[22m
+[2m    scripts\fix-campaign.ts[22m
+[2m    scripts\fix-users-table.ts[22m
+[2m    scripts\migrate-excel.ts[22m
+[2m    scripts\migrate-to-turso.js[22m
+[2m    scripts\print-drizzle-migrations.cjs[22m
+[2m    scripts\read-excel.js[22m
+[2m    scripts\run-migrations.ts[22m
+[2m    scripts\setup-auth-tables.ts[22m
+[2m    scripts\test-statistics.ts[22m
+[2m    scripts\turso-baseline-drizzle.cjs[22m
+[2m    scripts\turso-print-drizzle.cjs[22m
+[2m    src\lib\cache.ts[22m
+[2m    src\types\index.ts[22m
+[2m    src\components\email\campaign-analytics.tsx[22m
+[2m    src\components\email\recipient-selector.tsx[22m
+[2m    src\components\email\rich-text-editor.tsx[22m
+[2m    src\components\ui\index.ts[22m
+[2m    src\server\email\gmail.ts[22m
+[2m    src\lib\stores\auth-store.ts[22m
+[2m    src\lib\validation\index.ts[22m
+
+  [33m⚠[39m Unused export: organizationInvitations[33m (75)[39m
+[2m    src\lib\db\schema.ts[22m
+[2m    src\server\crypto\oauth-tokens.ts[22m
+[2m    src\server\email\tracking.ts[22m
+[2m    src\lib\customers\category.ts[22m
+[2m    src\lib\validation\email.ts[22m
+[2m    src\lib\validation\greek.ts[22m
+[2m    src\auth.ts[22m
+[2m    src\components\ui\glass-skeleton.tsx[22m
+[2m    src\lib\utils.ts[22m
+[2m    src\server\api\http.ts[22m
+[2m    src\server\authz.ts[22m
+[2m    src\server\db\auto-heal.ts[22m
+[2m    src\server\api\drizzle-schemas.ts[22m
+[2m    src\server\email\smtp.ts[22m
+[2m    src\components\ui\glass-avatar.tsx[22m
+[2m    src\hooks\use-debounce.ts[22m
+[2m    src\lib\ai\meltemi.ts[22m
+[2m    src\server\maps\geocode.ts[22m
+[2m    src\hooks\use-keyboard-shortcut.ts[22m
+
+  [33m⚠[39m Unused type: Organization[33m (76)[39m
+[2m    src\lib\db\schema.ts[22m
+[2m    src\server\email\job-queue.ts[22m
+[2m    src\server\email\assets.ts[22m
+[2m    src\server\email\transport.ts[22m
+[2m    src\server\maps\geocode-utils.ts[22m
+[2m    src\lib\db\index.ts[22m
+[2m    src\lib\validation\email.ts[22m
+[2m    src\lib\validation\greek.ts[22m
+[2m    src\components\ui\glass-card.tsx[22m
+[2m    src\components\ui\glass-button.tsx[22m
+[2m    src\components\ui\glass-badge.tsx[22m
+[2m    src\components\ui\glass-progress.tsx[22m
+[2m    src\components\ui\glass-skeleton.tsx[22m
+[2m    src\server\api\http.ts[22m
+[2m    src\server\authz.ts[22m
+[2m    src\server\email\recipients.ts[22m
+[2m    src\server\email\smtp.ts[22m
+[2m    src\components\ui\glass-input.tsx[22m
+[2m    src\components\ui\glass-avatar.tsx[22m
+[2m    src\components\ui\glass-dropdown.tsx[22m
+[2m    src\components\ui\glass-empty-state.tsx[22m
+[2m    src\components\ui\glass-select.tsx[22m
+[2m    src\components\ui\glass-modal.tsx[22m
+[2m    src\components\ui\glass-switch.tsx[22m
+[2m    src\components\ui\glass-tabs.tsx[22m
+[2m    src\lib\ai\meltemi.ts[22m
+[2m    src\server\maps\geocode.ts[22m
+[2m    src\components\layout\navigation.ts[22m
+[2m    src\components\ui\glass-textarea.tsx[22m
+[2m    src\components\ui\glass-tooltip.tsx[22m
+
+  [2m┌────────────────────────────────────────────────────┐[22m
+  [2m│[22m [32m┌─────┐[39m                                            [2m│[22m
+  [2m│[22m [32m│ ◠ ◠ │[39m                                            [2m│[22m
+  [2m│[22m [32m│  ▽  │[39m                                            [2m│[22m
+  [2m│[22m [32m└─────┘[39m                                            [2m│[22m
+  [2m│[22m React Doctor [2m(www.react.doctor)[22m                    [2m│[22m
+  [2m│[22m                                                    [2m│[22m
+  [2m│[22m [32m81[39m / 100  [32mGreat[39m                                    [2m│[22m
+  [2m│[22m                                                    [2m│[22m
+  [2m│[22m [32m█████████████████████████████████████████[39m[2m░░░░░░░░░[22m [2m│[22m
+  [2m│[22m                                                    [2m│[22m
+  [2m│[22m [33m⚠ 312 warnings[39m  [2macross 102 files[22m  [2min 3.5s[22m          [2m│[22m
+  [2m└────────────────────────────────────────────────────┘[22m
+
+[2m  Full diagnostics written to C:\Users\Stelios\AppData\Local\Temp\react-doctor-e6408ba3-dd2c-4b9c-946c-f7c7cad96abe[22m
+
+[2m  Share your results: [36mhttps://www.react.doctor/share?p=kktires-web&s=81&w=312&f=102[39m[22m
+

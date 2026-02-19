@@ -1,0 +1,10 @@
+{
+  "eslint": {
+    "maxWarnings": 172
+  },
+  "reactDoctor": {
+    "minScore": 81,
+    "maxWarnings": 312,
+    "maxFilesWithWarnings": 102
+  }
+}

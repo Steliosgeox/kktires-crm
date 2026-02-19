@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, LazyMotion, domAnimation, m } from 'framer-motion';
 import {
   Search,
   Users,
@@ -36,6 +36,7 @@ export function CommandPalette() {
   const { commandPaletteOpen, closeCommandPalette, toggleCommandPalette } = useUIStore();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Toggle with Cmd+K
   useKeyboardShortcut({
@@ -96,6 +97,9 @@ export function CommandPalette() {
     if (commandPaletteOpen) {
       setQuery('');
       setSelectedIndex(0);
+      requestAnimationFrame(() => {
+        searchInputRef.current?.focus();
+      });
     }
   }, [commandPaletteOpen]);
 
@@ -127,23 +131,24 @@ export function CommandPalette() {
   let currentIndex = 0;
 
   return (
-    <AnimatePresence>
-      {commandPaletteOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={cn(
-              'absolute inset-0 bg-black/60 backdrop-blur-sm',
-              SHELL_CUSTOMERS_REFACTOR_ENABLED && 'backdrop-blur-[2px]'
-            )}
-            onClick={closeCommandPalette}
-          />
+    <LazyMotion features={domAnimation}>
+      <AnimatePresence>
+        {commandPaletteOpen && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
+            {/* Backdrop */}
+            <m.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className={cn(
+                'absolute inset-0 bg-black/60 backdrop-blur-sm',
+                SHELL_CUSTOMERS_REFACTOR_ENABLED && 'backdrop-blur-[2px]'
+              )}
+              onClick={closeCommandPalette}
+            />
 
           {/* Dialog */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
@@ -157,7 +162,7 @@ export function CommandPalette() {
             <div className="flex items-center gap-3 border-b border-white/[0.08] px-4">
               <Search className="h-5 w-5 text-white/40" />
               <input
-                autoFocus
+                ref={searchInputRef}
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -225,10 +230,11 @@ export function CommandPalette() {
                 ))
               )}
             </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+          </m.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </LazyMotion>
   );
 }
 
