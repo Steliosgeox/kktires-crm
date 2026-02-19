@@ -169,7 +169,7 @@ describe('processDueEmailJobs', () => {
     expect(job?.lastError).toContain('No recipients');
   });
 
-  it('finalizes campaign as failed when any recipient fails', async () => {
+  it('finalizes campaign as sent when at least one recipient succeeds', async () => {
     await seedCustomer('cust_1', 'one@example.com', 'One');
     await seedCustomer('cust_2', 'two@example.com', 'Two');
     await seedCampaignAndJob('camp_partial_fail');
@@ -208,7 +208,7 @@ describe('processDueEmailJobs', () => {
       where: (j, { eq: whereEq }) => whereEq(j.id, 'job_camp_partial_fail'),
     });
 
-    expect(campaign?.status).toBe('failed');
+    expect(campaign?.status).toBe('sent');
     expect(campaign?.totalRecipients).toBe(2);
     expect(campaign?.sentCount).toBe(1);
     expect(job?.status).toBe('completed');

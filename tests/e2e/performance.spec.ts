@@ -13,7 +13,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Performance Optimizations', () => {
     test.describe('Aurora Animation Visibility', () => {
-        test('aurora animation should pause when tab is hidden', async ({ page, context }) => {
+        test('aurora background should be static (no continuous animation)', async ({ page }) => {
             // Navigate to the dashboard
             await page.goto('/');
 
@@ -26,63 +26,38 @@ test.describe('Performance Optimizations', () => {
             // Verify the aurora background exists
             await expect(auroraBackground).toBeVisible();
 
-            // Check initial animation state (should be running when visible)
-            const initialAnimationState = await auroraBackground.evaluate((el) => {
-                return window.getComputedStyle(el).animationPlayState;
+            // Aurora should be static to avoid continuous GPU compositing.
+            const animationState = await auroraBackground.evaluate((el) => {
+                const self = window.getComputedStyle(el);
+                const before = window.getComputedStyle(el, '::before');
+                return {
+                    selfName: self.animationName,
+                    selfDuration: self.animationDuration,
+                    beforeName: before.animationName,
+                    beforeDuration: before.animationDuration,
+                };
             });
-            expect(initialAnimationState).toBe('running');
-
-            // Simulate tab being hidden by dispatching visibilitychange event
-            await page.evaluate(() => {
-                Object.defineProperty(document, 'hidden', {
-                    configurable: true,
-                    get: () => true,
-                });
-                document.dispatchEvent(new Event('visibilitychange'));
-            });
-
-            // Wait for the visibility change handler to execute
-            await page.waitForTimeout(100);
-
-            // Check that animation is paused
-            const pausedAnimationState = await auroraBackground.evaluate((el) => {
-                return el.style.animationPlayState;
-            });
-            expect(pausedAnimationState).toBe('paused');
-
-            // Simulate tab being visible again
-            await page.evaluate(() => {
-                Object.defineProperty(document, 'hidden', {
-                    configurable: true,
-                    get: () => false,
-                });
-                document.dispatchEvent(new Event('visibilitychange'));
-            });
-
-            // Wait for the visibility change handler to execute
-            await page.waitForTimeout(100);
-
-            // Check that animation is running again
-            const resumedAnimationState = await auroraBackground.evaluate((el) => {
-                return el.style.animationPlayState;
-            });
-            expect(resumedAnimationState).toBe('running');
+            expect(animationState.selfName).toBe('none');
+            expect(animationState.beforeName).toBe('none');
+            expect(animationState.selfDuration).toBe('0s');
+            expect(animationState.beforeDuration).toBe('0s');
         });
 
         test('aurora background should have reduced blur value', async ({ page }) => {
             await page.goto('/');
             await page.waitForLoadState('networkidle');
 
-            // Find the aurora gradient element (the one with blur)
-            const auroraGradient = page.locator('.aurora-background > div > div').first();
+            const auroraBackground = page.locator('.aurora-background');
+            await expect(auroraBackground).toBeVisible();
 
-            // Check the blur filter value
-            const filterValue = await auroraGradient.evaluate((el) => {
-                return (el as HTMLElement).style.filter;
+            // Check pseudo-element blur filter value
+            const filterValue = await auroraBackground.evaluate((el) => {
+                return window.getComputedStyle(el, '::before').filter;
             });
 
-            // Verify blur is reduced to 40px (not 60px or 80px)
-            expect(filterValue).toContain('blur(40px)');
+            // Verify blur is reduced to 28px (not 40px/60px/80px)
+            expect(filterValue).toContain('blur(28px)');
+            expect(filterValue).not.toContain('blur(40px)');
             expect(filterValue).not.toContain('blur(60px)');
             expect(filterValue).not.toContain('blur(80px)');
         });
@@ -108,8 +83,10 @@ test.describe('Performance Optimizations', () => {
             await page.goto('/');
             await page.waitForLoadState('networkidle');
 
-            // Find a GlassCard component (there should be several on the dashboard)
-            const glassCard = page.locator('[class*="backdrop-blur"]').first();
+            // Find a real GlassCard (avoid sidebar/header backdrop-blur containers)
+            const glassCard = page
+                .locator('[class*="rounded-lg"][class*="border-white/[0.10]"][class*="bg-white/[0.04]"][class*="backdrop-blur-xl"]')
+                .first();
 
             // Verify it has the expected glass styling
             await expect(glassCard).toBeVisible();

@@ -27,6 +27,7 @@ SELECT
   END as is_valid
 FROM customers
 WHERE email IS NOT NULL AND email != '';
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 2: AFM Validation View
@@ -44,6 +45,7 @@ SELECT
   END as is_valid
 FROM customers
 WHERE afm IS NOT NULL AND afm != '';
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 3: Validation Triggers for Customers
@@ -61,10 +63,11 @@ BEGIN
               AND NEW.email NOT GLOB '*@.*'
               AND length(NEW.email) >= 5
               AND length(NEW.email) <= 254) THEN
-      RAISE(ABORT, 'Invalid email format: ' || NEW.email)
+      RAISE(ABORT, 'Invalid email format')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Email validation trigger for customers - UPDATE
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_email_update
@@ -78,10 +81,11 @@ BEGIN
               AND NEW.email NOT GLOB '*@.*'
               AND length(NEW.email) >= 5
               AND length(NEW.email) <= 254) THEN
-      RAISE(ABORT, 'Invalid email format: ' || NEW.email)
+      RAISE(ABORT, 'Invalid email format')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Secondary email validation trigger for customers - INSERT
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_email_secondary_insert
@@ -95,10 +99,11 @@ BEGIN
               AND NEW.email_secondary NOT GLOB '*@.*'
               AND length(NEW.email_secondary) >= 5
               AND length(NEW.email_secondary) <= 254) THEN
-      RAISE(ABORT, 'Invalid secondary email format: ' || NEW.email_secondary)
+      RAISE(ABORT, 'Invalid secondary email format')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Secondary email validation trigger for customers - UPDATE
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_email_secondary_update
@@ -112,10 +117,11 @@ BEGIN
               AND NEW.email_secondary NOT GLOB '*@.*'
               AND length(NEW.email_secondary) >= 5
               AND length(NEW.email_secondary) <= 254) THEN
-      RAISE(ABORT, 'Invalid secondary email format: ' || NEW.email_secondary)
+      RAISE(ABORT, 'Invalid secondary email format')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- AFM validation trigger for customers - INSERT
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_afm_insert
@@ -131,6 +137,7 @@ BEGIN
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- AFM validation trigger for customers - UPDATE
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_afm_update
@@ -146,6 +153,7 @@ BEGIN
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Postal code validation trigger for customers - INSERT
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_postal_insert
@@ -161,6 +169,7 @@ BEGIN
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Postal code validation trigger for customers - UPDATE
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_postal_update
@@ -176,6 +185,7 @@ BEGIN
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Website URL validation trigger for customers - INSERT
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_website_insert
@@ -191,6 +201,7 @@ BEGIN
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Website URL validation trigger for customers - UPDATE
 CREATE TRIGGER IF NOT EXISTS trg_validate_customer_website_update
@@ -206,6 +217,7 @@ BEGIN
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 4: Validation Triggers for Leads
@@ -223,10 +235,11 @@ BEGIN
               AND NEW.email NOT GLOB '*@.*'
               AND length(NEW.email) >= 5
               AND length(NEW.email) <= 254) THEN
-      RAISE(ABORT, 'Invalid email format: ' || NEW.email)
+      RAISE(ABORT, 'Invalid email format')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- Email validation trigger for leads - UPDATE
 CREATE TRIGGER IF NOT EXISTS trg_validate_lead_email_update
@@ -240,10 +253,11 @@ BEGIN
               AND NEW.email NOT GLOB '*@.*'
               AND length(NEW.email) >= 5
               AND length(NEW.email) <= 254) THEN
-      RAISE(ABORT, 'Invalid email format: ' || NEW.email)
+      RAISE(ABORT, 'Invalid email format')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 5: Validation Triggers for Campaign Recipients
@@ -260,10 +274,11 @@ BEGIN
               AND NEW.email NOT GLOB '*@.*'
               AND length(NEW.email) >= 5
               AND length(NEW.email) <= 254) THEN
-      RAISE(ABORT, 'Invalid email format for recipient: ' || NEW.email)
+      RAISE(ABORT, 'Invalid email format for recipient')
     ELSE 1
   END;
 END;
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 6: Data Quality Views
@@ -377,6 +392,7 @@ WHERE email IS NOT NULL
            AND email NOT GLOB '*@.*'
            AND length(email) >= 5
            AND length(email) <= 254);
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 7: Statistics View

@@ -44,15 +44,23 @@ CREATE TABLE IF NOT EXISTS email_delivery_events (
   FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE,
   FOREIGN KEY (recipient_id) REFERENCES campaign_recipients(id) ON DELETE CASCADE
 );
+--> statement-breakpoint
 
 -- Indexes for email_delivery_events
 CREATE INDEX IF NOT EXISTS idx_delivery_events_campaign ON email_delivery_events(campaign_id);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_delivery_events_recipient ON email_delivery_events(recipient_id);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_delivery_events_type ON email_delivery_events(event_type);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_delivery_events_failure_reason ON email_delivery_events(failure_reason);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_delivery_events_domain ON email_delivery_events(domain);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_delivery_events_occurred_at ON email_delivery_events(occurred_at);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_delivery_events_org_created ON email_delivery_events(org_id, created_at);
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 2: Email Suppressions Table
@@ -82,11 +90,16 @@ CREATE TABLE IF NOT EXISTS email_suppressions (
   FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
   FOREIGN KEY (source_campaign_id) REFERENCES email_campaigns(id) ON DELETE SET NULL
 );
+--> statement-breakpoint
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_suppressions_org_email ON email_suppressions(org_id, email);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_suppressions_type ON email_suppressions(suppression_type);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_suppressions_expires ON email_suppressions(expires_at);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_suppressions_org_type ON email_suppressions(org_id, suppression_type);
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 3: Email Validation Cache Table
@@ -115,10 +128,14 @@ CREATE TABLE IF NOT EXISTS email_validation_cache (
   check_count INTEGER DEFAULT 1,
   last_used_at INTEGER NOT NULL
 );
+--> statement-breakpoint
 
 CREATE INDEX IF NOT EXISTS idx_validation_cache_domain ON email_validation_cache(domain);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_validation_cache_expires ON email_validation_cache(expires_at);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_validation_cache_valid ON email_validation_cache(syntax_valid, mx_valid);
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 4: Email Retry Configuration
@@ -139,6 +156,7 @@ CREATE TABLE IF NOT EXISTS email_retry_config (
   
   FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE
 );
+--> statement-breakpoint
 
 -- Default retry configurations (global defaults, org_id is NULL)
 INSERT OR IGNORE INTO email_retry_config (id, org_id, failure_reason, max_retries, initial_delay_seconds, backoff_multiplier, max_delay_seconds, created_at, updated_at) VALUES
@@ -147,6 +165,7 @@ INSERT OR IGNORE INTO email_retry_config (id, org_id, failure_reason, max_retrie
   ('rcfg_rate_limited', NULL, 'rate_limited', 5, 900, 2.0, 3600, strftime('%s', 'now'), strftime('%s', 'now')),
   ('rcfg_connection_failed', NULL, 'connection_failed', 3, 300, 2.0, 3600, strftime('%s', 'now'), strftime('%s', 'now')),
   ('rcfg_deferred', NULL, 'deferred', 3, 1800, 1.5, 14400, strftime('%s', 'now'), strftime('%s', 'now'));
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 5: Enhance Campaign Recipients Table
@@ -156,24 +175,38 @@ INSERT OR IGNORE INTO email_retry_config (id, org_id, failure_reason, max_retrie
 
 -- Add failure tracking columns to campaign_recipients
 ALTER TABLE campaign_recipients ADD COLUMN failure_category TEXT;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN failure_reason_detailed TEXT;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN bounce_type TEXT;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN attempt_count INTEGER DEFAULT 0;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN last_attempt_at INTEGER;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN next_retry_at INTEGER;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN mx_valid INTEGER;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN dns_checked_at INTEGER;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN email_normalized TEXT;
+--> statement-breakpoint
 ALTER TABLE campaign_recipients ADD COLUMN domain TEXT;
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 6: New Indexes for Campaign Recipients
 -- ============================================
 
 CREATE INDEX IF NOT EXISTS idx_recipients_campaign_status ON campaign_recipients(campaign_id, status);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_recipients_status_retry ON campaign_recipients(status, next_retry_at);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_recipients_domain ON campaign_recipients(domain);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_recipients_bounce_type ON campaign_recipients(bounce_type);
+--> statement-breakpoint
 
 -- ============================================
 -- SECTION 7: Utility Views
@@ -191,8 +224,8 @@ SELECT
   cr.bounce_type,
   cr.attempt_count,
   cr.next_retry_at,
-  c.firstName,
-  c.lastName,
+  c.first_name,
+  c.last_name,
   c.company,
   ec.name as campaign_name,
   ec.subject as campaign_subject
@@ -203,6 +236,7 @@ WHERE cr.status = 'failed'
   AND cr.next_retry_at IS NOT NULL
   AND cr.next_retry_at <= strftime('%s', 'now')
   AND cr.attempt_count < 5;
+--> statement-breakpoint
 
 -- View for active suppression check
 CREATE VIEW IF NOT EXISTS v_suppressed_emails AS
@@ -220,6 +254,7 @@ SELECT
     ELSE 0
   END as is_active
 FROM email_suppressions;
+--> statement-breakpoint
 
 -- View for email validation status
 CREATE VIEW IF NOT EXISTS v_email_validation_status AS
@@ -240,6 +275,7 @@ SELECT
     ELSE 0
   END as is_cache_valid
 FROM email_validation_cache evc;
+--> statement-breakpoint
 
 -- View for delivery statistics by campaign
 CREATE VIEW IF NOT EXISTS v_campaign_delivery_stats AS
@@ -261,6 +297,7 @@ SELECT
 FROM email_campaigns ec
 LEFT JOIN email_delivery_events ede ON ede.campaign_id = ec.id
 GROUP BY ec.id;
+--> statement-breakpoint
 
 -- View for domain health analysis
 CREATE VIEW IF NOT EXISTS v_domain_health AS
