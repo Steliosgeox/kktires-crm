@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   and,
+  asc,
+  count,
   eq,
   gt,
   gte,
@@ -12,11 +14,15 @@ import {
   or,
   type SQL,
 } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { customers, db, segmentCustomers, segments } from '@/lib/db';
-import { createRequestId, handleApiError, withValidatedBody } from '@/server/api/http';
+import {
+  createRequestId,
+  handleApiError,
+  jsonError,
+  parsePagination,
+} from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 const SEGMENTABLE_COLUMNS = {
@@ -57,13 +63,6 @@ const SegmentConditionSchema = z.object({
 const SegmentFiltersSchema = z.object({
   logic: z.enum(['and', 'or']).default('and'),
   conditions: z.array(SegmentConditionSchema).max(30),
-});
-
-const SegmentCreateSchema = z.object({
-  name: z.string().trim().min(1).max(160),
-  description: z.string().trim().max(1_000).nullable().optional(),
-  filters: SegmentFiltersSchema.nullable().optional(),
-  staticCustomerIds: z.array(z.string().trim().min(1).max(80)).max(10_000).optional(),
 });
 
 function buildCondition(condition: z.infer<typeof SegmentConditionSchema>): SQL | null {
@@ -129,124 +128,116 @@ async function getStaticCustomerIds(orgId: string, segmentId: string): Promise<s
   return rows.map((row) => row.customerId);
 }
 
-// GET /api/segments - Get all segments with resolved customer counts
-export async function GET() {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const requestId = createRequestId();
   try {
     const session = await requireSession();
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
-        { status: 401 }
-      );
-    }
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
     const orgId = getOrgIdFromSession(session);
+    const { id } = await params;
 
-    const allSegments = await db.query.segments.findMany({
-      where: eq(segments.orgId, orgId),
-      orderBy: (segmentTable, { desc }) => [desc(segmentTable.createdAt)],
+    const segment = await db.query.segments.findFirst({
+      where: and(eq(segments.id, id), eq(segments.orgId, orgId)),
+    });
+    if (!segment) return jsonError('Segment not found', 404, 'NOT_FOUND', requestId);
+
+    const parsedFilters = SegmentFiltersSchema.nullish().parse(segment.filters);
+    const [dynamicIds, staticIds] = await Promise.all([
+      getDynamicCustomerIds(orgId, parsedFilters),
+      getStaticCustomerIds(orgId, id),
+    ]);
+    const resolvedIds = Array.from(new Set([...dynamicIds, ...staticIds]));
+
+    const { searchParams } = new URL(request.url);
+    const search = (searchParams.get('search') || '').trim().slice(0, 120);
+    const { page, limit, offset } = parsePagination(searchParams, {
+      defaultPage: 1,
+      defaultLimit: 50,
+      maxLimit: 200,
     });
 
-    const segmentsWithCounts = await Promise.all(
-      allSegments.map(async (segment) => {
-        try {
-          const parsedFilters = SegmentFiltersSchema.nullish().parse(segment.filters);
-          const [dynamicIds, staticIds] = await Promise.all([
-            getDynamicCustomerIds(orgId, parsedFilters),
-            getStaticCustomerIds(orgId, segment.id),
-          ]);
-          const resolved = new Set([...dynamicIds, ...staticIds]);
-          return {
-            ...segment,
-            customerCount: resolved.size,
-            staticCustomerIds: staticIds,
-          };
-        } catch {
-          return { ...segment, customerCount: 0, staticCustomerIds: [] as string[] };
-        }
-      })
-    );
+    if (resolvedIds.length === 0) {
+      return NextResponse.json({
+        requestId,
+        segment: { id: segment.id, name: segment.name },
+        summary: {
+          dynamicCount: dynamicIds.length,
+          staticCount: staticIds.length,
+          totalResolved: 0,
+        },
+        customers: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      });
+    }
 
-    return NextResponse.json({ segments: segmentsWithCounts, requestId });
-  } catch (error) {
-    return handleApiError('segments:get', error, requestId, {
-      message: 'Failed to fetch segments',
-    });
-  }
-}
-
-// POST /api/segments - Create new segment
-export async function POST(request: NextRequest) {
-  const requestId = createRequestId();
-  try {
-    const session = await requireSession();
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized', code: 'UNAUTHORIZED', requestId },
-        { status: 401 }
+    const whereParts = [eq(customers.orgId, orgId), inArray(customers.id, resolvedIds)];
+    if (search) {
+      const s = `%${search}%`;
+      whereParts.push(
+        or(
+          like(customers.firstName, s),
+          like(customers.lastName, s),
+          like(customers.company, s),
+          like(customers.email, s)
+        ) as never
       );
     }
-    const orgId = getOrgIdFromSession(session);
-    const body = await withValidatedBody(request, SegmentCreateSchema, { maxBytes: 300_000 });
 
-    const staticCustomerIds = Array.from(new Set(body.staticCustomerIds || []));
-    if (staticCustomerIds.length > 0) {
-      const validCustomers = await db
-        .select({ id: customers.id })
+    const [rows, totalRows] = await Promise.all([
+      db
+        .select({
+          id: customers.id,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+          company: customers.company,
+          email: customers.email,
+          city: customers.city,
+          category: customers.category,
+          isVip: customers.isVip,
+        })
         .from(customers)
-        .where(and(eq(customers.orgId, orgId), inArray(customers.id, staticCustomerIds)));
-      if (validCustomers.length !== staticCustomerIds.length) {
-        return NextResponse.json(
-          { error: 'Some selected customers do not belong to this organization', code: 'BAD_REQUEST', requestId },
-          { status: 400 }
-        );
-      }
-    }
+        .where(and(...whereParts))
+        .orderBy(asc(customers.firstName), asc(customers.lastName))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ count: count() })
+        .from(customers)
+        .where(and(...whereParts)),
+    ]);
 
-    const parsedFilters = body.filters || null;
-    const dynamicIds = await getDynamicCustomerIds(orgId, parsedFilters);
-    const resolvedCount = new Set([...dynamicIds, ...staticCustomerIds]).size;
-
-    const segmentId = nanoid();
-    const now = new Date();
-
-    const [newSegment] = await db
-      .insert(segments)
-      .values({
-        id: segmentId,
-        orgId,
-        name: body.name,
-        description: body.description || null,
-        filters: parsedFilters,
-        customerCount: resolvedCount,
-        createdBy: session.user.id,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
-    if (staticCustomerIds.length > 0) {
-      await db.insert(segmentCustomers).values(
-        staticCustomerIds.map((customerId) => ({
-          id: `scm_${nanoid()}`,
-          segmentId,
-          customerId,
-          createdAt: now,
-        }))
-      );
-    }
+    const total = totalRows[0]?.count || 0;
 
     return NextResponse.json({
-      segment: {
-        ...newSegment,
-        staticCustomerIds,
-        customerCount: resolvedCount,
-      },
       requestId,
+      segment: {
+        id: segment.id,
+        name: segment.name,
+      },
+      summary: {
+        dynamicCount: dynamicIds.length,
+        staticCount: staticIds.length,
+        totalResolved: resolvedIds.length,
+      },
+      customers: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
-    return handleApiError('segments:post', error, requestId, {
-      message: 'Failed to create segment',
+    return handleApiError('segments:id:customers:get', error, requestId, {
+      message: 'Failed to fetch segment customers',
     });
   }
 }

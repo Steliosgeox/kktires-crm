@@ -62,11 +62,13 @@ export async function GET(request: NextRequest) {
         .where(eq(emailCampaigns.id, campaignId));
     }
 
-    // Mark the customer as unsubscribed.
-    await db
-      .update(customers)
-      .set({ unsubscribed: true, updatedAt: new Date() })
-      .where(and(eq(customers.id, recipient.customerId), eq(customers.orgId, campaign.orgId)));
+    // Mark linked customer as unsubscribed when available.
+    if (recipient.customerId) {
+      await db
+        .update(customers)
+        .set({ unsubscribed: true, updatedAt: new Date() })
+        .where(and(eq(customers.id, recipient.customerId), eq(customers.orgId, campaign.orgId)));
+    }
 
     // Also record a tracking event for campaign analytics (best-effort).
     const existingUnsubEvent = await db.query.emailTracking.findFirst({
