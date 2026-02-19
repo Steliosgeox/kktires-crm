@@ -11,8 +11,6 @@ import {
   AlertCircle,
   Send,
   MoreHorizontal,
-  Star,
-  StarOff,
   Trash2,
   Copy,
   Edit,
@@ -152,7 +150,7 @@ export function OutlookList({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={type === 'campaigns' ? 'Αναζήτηση campaigns...' : 'Αναζήτηση templates...'}
+            placeholder={type === 'campaigns' ? 'Αναζήτηση καμπανιών...' : 'Αναζήτηση προτύπων...'}
             className="w-full pl-10 pr-4 py-2 text-sm rounded-md transition-all outlook-input"
             style={{
               background: 'var(--outlook-bg-surface)',
@@ -256,7 +254,7 @@ export function OutlookList({
               {searchQuery ? 'Δεν βρέθηκαν αποτελέσματα' : 'Δεν υπάρχουν ακόμα'}
             </p>
             <p className="text-xs mt-1">
-              {searchQuery ? 'Δοκιμάστε διαφορετική αναζήτηση' : 'Δημιουργήστε το πρώτο σας campaign'}
+              {searchQuery ? 'Δοκιμάστε διαφορετική αναζήτηση' : 'Δημιουργήστε την πρώτη σας καμπάνια'}
             </p>
           </div>
         ) : (
@@ -336,8 +334,8 @@ export function OutlookList({
                           className="flex items-center gap-3 text-xs"
                           style={{ color: 'var(--outlook-text-tertiary)' }}
                         >
-                          <span>{campaign.openCount} opens</span>
-                          <span>{campaign.clickCount} clicks</span>
+                          <span>{campaign.openCount} ανοίγματα</span>
+                          <span>{campaign.clickCount} κλικ</span>
                         </div>
                       )}
 
@@ -412,7 +410,7 @@ export function OutlookList({
           color: 'var(--outlook-text-tertiary)',
         }}
       >
-        {filteredItems.length} {type === 'campaigns' ? 'campaigns' : 'templates'}
+        {filteredItems.length} {type === 'campaigns' ? 'καμπάνιες' : 'πρότυπα'}
       </div>
 
       {/* Context Menu */}

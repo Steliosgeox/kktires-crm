@@ -122,15 +122,6 @@ async function getStaticCustomerIds(orgId: string, segmentId: string): Promise<s
   return rows.map((row) => row.customerId);
 }
 
-async function computeResolvedCount(
-  orgId: string,
-  filters: z.infer<typeof SegmentFiltersSchema> | null | undefined,
-  staticCustomerIds: string[]
-): Promise<number> {
-  const dynamicIds = await getDynamicCustomerIds(orgId, filters);
-  return new Set([...dynamicIds, ...staticCustomerIds]).size;
-}
-
 // GET /api/segments/:id - Get single segment with static members
 export async function GET(
   _request: NextRequest,
@@ -150,12 +141,17 @@ export async function GET(
     if (!segment) return jsonError('Segment not found', 404, 'NOT_FOUND', requestId);
 
     const parsedFilters = SegmentFiltersSchema.nullish().parse(segment.filters);
-    const staticCustomerIds = await getStaticCustomerIds(orgId, id);
-    const customerCount = await computeResolvedCount(orgId, parsedFilters, staticCustomerIds);
+    const [dynamicCustomerIds, staticCustomerIds] = await Promise.all([
+      getDynamicCustomerIds(orgId, parsedFilters),
+      getStaticCustomerIds(orgId, id),
+    ]);
+    const customerCount = new Set([...dynamicCustomerIds, ...staticCustomerIds]).size;
 
     return NextResponse.json({
       segment: {
         ...segment,
+        dynamicCount: dynamicCustomerIds.length,
+        staticCount: staticCustomerIds.length,
         customerCount,
         staticCustomerIds,
       },
@@ -214,7 +210,8 @@ export async function PUT(
         ? body.filters
         : SegmentFiltersSchema.nullish().parse(existing.filters);
 
-    const customerCount = await computeResolvedCount(orgId, nextFilters, nextStaticCustomerIds);
+    const dynamicCustomerIds = await getDynamicCustomerIds(orgId, nextFilters);
+    const customerCount = new Set([...dynamicCustomerIds, ...nextStaticCustomerIds]).size;
 
     const [updatedSegment] = await db
       .update(segments)
@@ -258,6 +255,8 @@ export async function PUT(
     return NextResponse.json({
       segment: {
         ...updatedSegment,
+        dynamicCount: dynamicCustomerIds.length,
+        staticCount: nextStaticCustomerIds.length,
         customerCount,
         staticCustomerIds: nextStaticCustomerIds,
       },

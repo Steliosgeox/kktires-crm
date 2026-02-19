@@ -6,20 +6,15 @@ import { useUIStore } from '@/lib/stores/ui-store';
 import {
   Mail,
   FileText,
-  Users,
   Tag,
   Zap,
   Send,
-  Settings,
   Plus,
   ChevronDown,
   ChevronRight,
   Moon,
   Sun,
-  BarChart3,
-  Archive,
   Inbox,
-  Star,
   Clock,
   AlertCircle,
 } from 'lucide-react';
@@ -75,7 +70,7 @@ export function OutlookSidebar({
   const sections: SidebarSection[] = [
     {
       items: [
-        { id: 'all', label: 'Όλα τα Campaigns', icon: Inbox, count: folderCounts.all },
+        { id: 'all', label: 'Όλες οι Καμπάνιες', icon: Inbox, count: folderCounts.all },
       ],
     },
     {
@@ -93,7 +88,7 @@ export function OutlookSidebar({
       title: 'Εργαλεία',
       collapsible: true,
       items: [
-        { id: 'templates', label: 'Templates', icon: FileText },
+        { id: 'templates', label: 'Πρότυπα', icon: FileText },
         { id: 'segments', label: 'Τμήματα', icon: Tag },
         { id: 'automations', label: 'Αυτοματισμοί', icon: Zap },
       ],
@@ -122,7 +117,7 @@ export function OutlookSidebar({
           }}
         >
           <Plus className="w-4 h-4" />
-          <span>Νέο Campaign</span>
+          <span>Νέα Καμπάνια</span>
         </button>
       </div>
 

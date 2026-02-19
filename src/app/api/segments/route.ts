@@ -158,11 +158,19 @@ export async function GET() {
           const resolved = new Set([...dynamicIds, ...staticIds]);
           return {
             ...segment,
+            dynamicCount: dynamicIds.length,
+            staticCount: staticIds.length,
             customerCount: resolved.size,
             staticCustomerIds: staticIds,
           };
         } catch {
-          return { ...segment, customerCount: 0, staticCustomerIds: [] as string[] };
+          return {
+            ...segment,
+            dynamicCount: 0,
+            staticCount: 0,
+            customerCount: 0,
+            staticCustomerIds: [] as string[],
+          };
         }
       })
     );

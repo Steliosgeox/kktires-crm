@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { toast } from '@/lib/stores/ui-store';
 import { sanitizeHtml } from '@/lib/html-sanitize';
+import { type RecipientFilters } from '@/lib/email/recipient-filters';
+import { messagesEl } from '@/lib/i18n/ui/messages-el';
 
 interface Template {
   id: string;
@@ -41,13 +43,6 @@ interface Signature {
   name: string;
   content: string;
   isDefault: boolean;
-}
-
-interface RecipientFilters {
-  cities: string[];
-  tags: string[];
-  segments: string[];
-  categories: string[];
 }
 
 type ImageAlign = 'left' | 'center' | 'right';
@@ -616,7 +611,7 @@ export function OutlookEditor({
             className="text-lg font-semibold"
             style={{ color: 'var(--outlook-text-primary)' }}
           >
-            {isNew ? 'New Campaign' : 'Edit Campaign'}
+            {isNew ? messagesEl.email.newCampaign : messagesEl.email.editCampaign}
           </h2>
           {!isNew && campaignId && (
             <span
@@ -640,7 +635,7 @@ export function OutlookEditor({
               background: 'var(--outlook-bg-hover)',
             }}
           >
-            Cancel
+            {messagesEl.common.cancel}
           </button>
           <button
             onClick={() => onSave(false)}
@@ -652,7 +647,7 @@ export function OutlookEditor({
             }}
           >
             <Save className="w-4 h-4" />
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Αποθήκευση...' : messagesEl.common.save}
           </button>
           <button
             onClick={() => setShowSchedule(!showSchedule)}
@@ -663,7 +658,7 @@ export function OutlookEditor({
             }}
           >
             <Clock className="w-4 h-4" />
-            Schedule
+            {messagesEl.email.schedule}
           </button>
           <button
             onClick={() => onSave(true)}
@@ -676,7 +671,7 @@ export function OutlookEditor({
             }}
           >
             <Send className="w-4 h-4" />
-            {sending ? 'Sending...' : 'Send Now'}
+            {sending ? messagesEl.email.sending : messagesEl.email.sendNow}
           </button>
         </div>
       </div>
@@ -696,7 +691,7 @@ export function OutlookEditor({
                 className="block text-xs font-medium mb-1"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Date
+                Ημερομηνία
               </label>
               <input
                 type="date"
@@ -715,7 +710,7 @@ export function OutlookEditor({
                 className="block text-xs font-medium mb-1"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Time
+                Ώρα
               </label>
               <input
                 type="time"
@@ -732,13 +727,13 @@ export function OutlookEditor({
             <button
               onClick={() => {
                 if (!scheduleDate || !scheduleTime) {
-                  toast.warning('Date/time required', 'Select both date and time.');
+                  toast.warning('Απαιτείται ημερομηνία/ώρα', 'Επιλέξτε ημερομηνία και ώρα.');
                   return;
                 }
 
                 const dt = new Date(`${scheduleDate}T${scheduleTime}:00`);
                 if (isNaN(dt.getTime())) {
-                  toast.error('Invalid date/time', 'Please verify date and time and try again.');
+                  toast.error('Μη έγκυρη ημερομηνία/ώρα', 'Ελέγξτε τα πεδία και δοκιμάστε ξανά.');
                   return;
                 }
 
@@ -753,7 +748,7 @@ export function OutlookEditor({
                 opacity: (saving || sending || !hasRecipients) ? 0.6 : 1,
               }}
             >
-              Confirm Schedule
+              Επιβεβαίωση Προγραμματισμού
             </button>
           </div>
         </div>
@@ -779,13 +774,13 @@ export function OutlookEditor({
                 className="text-sm font-medium w-20"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Name:
+                {messagesEl.email.name}:
               </span>
               <input
                 type="text"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
-                placeholder="Campaign name..."
+                placeholder="Όνομα καμπάνιας..."
                 className="flex-1 text-sm bg-transparent border-none outline-none"
                 style={{ color: 'var(--outlook-text-primary)' }}
               />
@@ -802,7 +797,7 @@ export function OutlookEditor({
                 className="text-sm font-medium w-20"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                To:
+                {messagesEl.email.to}:
               </span>
               <div className="flex-1 flex items-center gap-2 flex-wrap">
                 {recipientFilters.cities.map((city) => (
@@ -814,7 +809,7 @@ export function OutlookEditor({
                       color: 'var(--outlook-accent)',
                     }}
                   >
-                    City: {city}
+                    {messagesEl.common.cities}: {city}
                     <button
                       onClick={() => setRecipientFilters({
                         ...recipientFilters,
@@ -835,7 +830,7 @@ export function OutlookEditor({
                       color: 'var(--outlook-success)',
                     }}
                   >
-                    Tag: {tag}
+                    {messagesEl.common.tags}: {tag}
                     <button
                       onClick={() => setRecipientFilters({
                         ...recipientFilters,
@@ -856,12 +851,57 @@ export function OutlookEditor({
                       color: 'var(--outlook-warning)',
                     }}
                   >
-                    Segment: {segment}
+                    {messagesEl.common.segments}: {segment}
                     <button
                       onClick={() => setRecipientFilters({
                         ...recipientFilters,
                         segments: recipientFilters.segments.filter((s) => s !== segment),
                       })}
+                      className="hover:opacity-70"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {recipientFilters.customerIds.length > 0 && (
+                  <span
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-full"
+                    style={{
+                      background: 'var(--outlook-info-bg)',
+                      color: 'var(--outlook-info)',
+                    }}
+                  >
+                    {messagesEl.common.customers}: {recipientFilters.customerIds.length}
+                    <button
+                      onClick={() =>
+                        setRecipientFilters({
+                          ...recipientFilters,
+                          customerIds: [],
+                        })
+                      }
+                      className="hover:opacity-70"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                {recipientFilters.rawEmails.map((email) => (
+                  <span
+                    key={email}
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-full"
+                    style={{
+                      background: 'var(--outlook-bg-hover)',
+                      color: 'var(--outlook-text-secondary)',
+                    }}
+                  >
+                    {email}
+                    <button
+                      onClick={() =>
+                        setRecipientFilters({
+                          ...recipientFilters,
+                          rawEmails: recipientFilters.rawEmails.filter((entry) => entry !== email),
+                        })
+                      }
                       className="hover:opacity-70"
                     >
                       ×
@@ -877,7 +917,7 @@ export function OutlookEditor({
                   }}
                 >
                   <Plus className="w-3 h-3" />
-                  Add Recipients
+                  {messagesEl.email.addRecipients}
                 </button>
               </div>
               {totalRecipients > 0 && (
@@ -888,7 +928,7 @@ export function OutlookEditor({
                     color: 'white',
                   }}
                 >
-                  {totalRecipients} recipients
+                  {totalRecipients} παραλήπτες
                 </span>
               )}
             </div>
@@ -904,13 +944,13 @@ export function OutlookEditor({
                 className="text-sm font-medium w-20"
                 style={{ color: 'var(--outlook-text-secondary)' }}
               >
-                Subject:
+                {messagesEl.email.subject}:
               </span>
               <input
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                placeholder="Email subject..."
+                placeholder="Θέμα email..."
                 className="flex-1 text-sm bg-transparent border-none outline-none"
                 style={{ color: 'var(--outlook-text-primary)' }}
               />
@@ -1047,7 +1087,7 @@ export function OutlookEditor({
                 }}
               >
                 <FileText className="w-3 h-3" />
-                Templates
+                {messagesEl.email.templates}
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showTemplates && (
@@ -1060,7 +1100,7 @@ export function OutlookEditor({
                 >
                   {templates.length === 0 ? (
                     <div className="p-3 text-sm" style={{ color: 'var(--outlook-text-tertiary)' }}>
-                      No templates
+                      Δεν υπάρχουν templates
                     </div>
                   ) : (
                     templates.map((template) => (
@@ -1092,7 +1132,7 @@ export function OutlookEditor({
                 }}
               >
                 <Variable className="w-3 h-3" />
-                Variables
+                {messagesEl.email.variables}
                 <ChevronDown className="w-3 h-3" />
               </button>
               {showVariables && (
@@ -1151,7 +1191,7 @@ export function OutlookEditor({
               }}
             >
               <Eye className="w-3 h-3" />
-              Preview
+              {messagesEl.email.preview}
             </button>
           </div>
 
@@ -1161,7 +1201,7 @@ export function OutlookEditor({
               style={{ borderColor: 'var(--outlook-border)' }}
             >
               <span className="text-xs" style={{ color: 'var(--outlook-text-secondary)' }}>
-                Image:
+                Εικόνα:
               </span>
               {[25, 50, 75, 100].map((pct) => (
                 <button
@@ -1249,7 +1289,7 @@ export function OutlookEditor({
                     )
                   );
                 }}
-                placeholder="Alt text"
+                placeholder="Εναλλακτικό κείμενο"
                 className="px-2 py-1 text-xs rounded-md"
                 style={{ background: 'var(--outlook-bg-surface)', border: '1px solid var(--outlook-border)' }}
               />
@@ -1269,7 +1309,7 @@ export function OutlookEditor({
                     );
                   }}
                 />
-                Embed inline (CID)
+                Ενσωμάτωση inline (CID)
               </label>
               <button
                 type="button"
@@ -1281,7 +1321,7 @@ export function OutlookEditor({
                 className="px-2 py-1 text-xs rounded-md"
                 style={{ background: 'var(--outlook-bg-hover)', color: 'var(--outlook-text-primary)' }}
               >
-                Replace
+                Αντικατάσταση
               </button>
               <button
                 type="button"
@@ -1303,7 +1343,7 @@ export function OutlookEditor({
                 className="px-2 py-1 text-xs rounded-md"
                 style={{ background: 'var(--outlook-error-bg)', color: 'var(--outlook-error)' }}
               >
-                Remove
+                Αφαίρεση
               </button>
             </div>
           )}
@@ -1353,7 +1393,7 @@ export function OutlookEditor({
               }}
             >
               <span className="text-xs" style={{ color: 'var(--outlook-text-tertiary)' }}>
-                View:
+                Προβολή:
               </span>
               <button
                 onClick={() => setPreviewMode('desktop')}
@@ -1400,7 +1440,7 @@ export function OutlookEditor({
                 <div
                   dangerouslySetInnerHTML={{
                     __html: sanitizeHtml(
-                      content || '<p style="color: #999;">No content...</p>'
+                      content || '<p style="color: #999;">Δεν υπάρχει περιεχόμενο...</p>'
                     ),
                   }}
                 />
@@ -1424,7 +1464,7 @@ export function OutlookEditor({
                   const assetId = img instanceof HTMLImageElement ? img.dataset.emailAssetId || null : null;
                   setSelectedImageAssetId(assetId);
                 }}
-                data-placeholder="Write your message here..."
+                data-placeholder="Γράψτε το μήνυμά σας εδώ..."
                 suppressContentEditableWarning
               />
             )}
@@ -1440,7 +1480,7 @@ export function OutlookEditor({
                 className="text-xs"
                 style={{ color: 'var(--outlook-text-tertiary)' }}
               >
-                Signature:
+                {messagesEl.email.signature}:
               </span>
               <select
                 value={selectedSignature || ''}
@@ -1452,7 +1492,7 @@ export function OutlookEditor({
                   color: 'var(--outlook-text-primary)',
                 }}
               >
-                <option value="">No signature</option>
+                <option value="">{messagesEl.email.noSignature}</option>
                 {signatures.map((sig) => (
                   <option key={sig.id} value={sig.id}>
                     {sig.name} {sig.isDefault ? '(Default)' : ''}

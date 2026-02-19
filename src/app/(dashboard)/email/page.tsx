@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import useSWR from 'swr';
 import { OutlookLayout } from '@/components/email/outlook-layout';
 import { OutlookSidebar } from '@/components/email/outlook-sidebar';
 import { OutlookList } from '@/components/email/outlook-list';
@@ -9,6 +10,12 @@ import { OutlookEditor } from '@/components/email/outlook-editor';
 import { OutlookRecipientDrawer } from '@/components/email/outlook-recipient-drawer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/stores/ui-store';
+import {
+  EMPTY_RECIPIENT_FILTERS,
+  hasRecipientSelection,
+  normalizeRecipientFiltersClient,
+  type RecipientFilters,
+} from '@/lib/email/recipient-filters';
 
 interface Campaign {
   id: string;
@@ -43,13 +50,6 @@ interface Signature {
   name: string;
   content: string;
   isDefault: boolean;
-}
-
-interface RecipientFilters {
-  cities: string[];
-  tags: string[];
-  segments: string[];
-  categories: string[];
 }
 
 interface CampaignAttachment {
@@ -102,18 +102,12 @@ export default function EmailPage() {
   const [campaignName, setCampaignName] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
-  const [recipientFilters, setRecipientFilters] = useState<RecipientFilters>({
-    cities: [],
-    tags: [],
-    segments: [],
-    categories: [],
-  });
+  const [recipientFilters, setRecipientFilters] = useState<RecipientFilters>({ ...EMPTY_RECIPIENT_FILTERS });
   const [attachments, setAttachments] = useState<CampaignAttachment[]>([]);
   const [inlineImages, setInlineImages] = useState<InlineImageConfig[]>([]);
   const [selectedSignature, setSelectedSignature] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-  const [recipientCount, setRecipientCount] = useState<number>(0);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -254,28 +248,32 @@ export default function EmailPage() {
     return parts.join(' | ');
   };
 
-  // Fetch recipient count when filters change
-  useEffect(() => {
-    const fetchRecipientCount = async () => {
-      try {
-        const params = new URLSearchParams();
-        if (recipientFilters.cities.length) params.set('cities', recipientFilters.cities.join(','));
-        if (recipientFilters.tags.length) params.set('tags', recipientFilters.tags.join(','));
-        if (recipientFilters.segments.length) params.set('segments', recipientFilters.segments.join(','));
-        if (recipientFilters.categories.length) params.set('categories', recipientFilters.categories.join(','));
+  const recipientCountKey = useMemo(() => {
+    if (!hasRecipientSelection(recipientFilters)) return null;
 
-        const response = await fetch(`/api/recipients/count?${params.toString()}`);
-        if (response.ok) {
-          const data = await response.json();
-          setRecipientCount(data.count || 0);
-        }
-      } catch (err) {
-        console.error('Error fetching recipient count:', err);
-      }
-    };
-
-    fetchRecipientCount();
+    const params = new URLSearchParams();
+    if (recipientFilters.cities.length) params.set('cities', recipientFilters.cities.join(','));
+    if (recipientFilters.tags.length) params.set('tags', recipientFilters.tags.join(','));
+    if (recipientFilters.segments.length) params.set('segments', recipientFilters.segments.join(','));
+    if (recipientFilters.categories.length) params.set('categories', recipientFilters.categories.join(','));
+    if (recipientFilters.customerIds.length) params.set('customerIds', recipientFilters.customerIds.join(','));
+    if (recipientFilters.rawEmails.length) params.set('rawEmails', recipientFilters.rawEmails.join(','));
+    return `/api/recipients/count?${params.toString()}`;
   }, [recipientFilters]);
+
+  const { data: recipientCountData } = useSWR<{ count?: number }>(
+    recipientCountKey,
+    async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch recipients: ${response.status}`);
+      }
+      return response.json() as Promise<{ count?: number }>;
+    },
+    { revalidateOnFocus: false }
+  );
+
+  const recipientCount = recipientCountData?.count ?? 0;
 
   // Handle section change
   const handleSectionChange = (sectionId: string) => {
@@ -300,7 +298,7 @@ export default function EmailPage() {
     setCampaignName('');
     setSubject('');
     setContent('');
-    setRecipientFilters({ cities: [], tags: [], segments: [], categories: [] });
+    setRecipientFilters({ ...EMPTY_RECIPIENT_FILTERS });
     setAttachments([]);
     setInlineImages([]);
     setSelectedSignature(null);
@@ -312,7 +310,7 @@ export default function EmailPage() {
     setIsNew(true);
     setIsEditing(true);
     resetEditor();
-    setCampaignName('Νέο Campaign');
+    setCampaignName('Νέα Καμπάνια');
   };
 
   // Handle campaign selection
@@ -331,7 +329,7 @@ export default function EmailPage() {
         setCampaignName(campaign.name);
         setSubject(campaign.subject);
         setContent(campaign.content || '');
-        setRecipientFilters(campaign.recipientFilters || { cities: [], tags: [], segments: [], categories: [] });
+        setRecipientFilters(normalizeRecipientFiltersClient(campaign.recipientFilters));
         setAttachments(campaign.assets?.attachments || []);
         setInlineImages(
           (campaign.assets?.inlineImages || []).map((image: InlineImageConfig, index: number) => ({
@@ -343,7 +341,7 @@ export default function EmailPage() {
       })
       .catch((err) => {
         console.error('Error loading campaign:', err);
-        setError('Αποτυχία φόρτωσης campaign');
+        setError('Αποτυχία φόρτωσης καμπάνιας');
       });
   };
 
@@ -547,11 +545,11 @@ export default function EmailPage() {
         setIsEditing(false);
         resetEditor();
       }
-      toast.success('Διαγράφηκε', 'Το campaign διαγράφηκε επιτυχώς.');
+      toast.success('Διαγράφηκε', 'Η καμπάνια διαγράφηκε επιτυχώς.');
     } catch (err) {
       console.error('Error deleting campaign:', err);
       setError('Αποτυχία διαγραφής');
-      toast.error('Αποτυχία διαγραφής', 'Δεν ήταν δυνατή η διαγραφή του campaign.');
+      toast.error('Αποτυχία διαγραφής', 'Δεν ήταν δυνατή η διαγραφή της καμπάνιας.');
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
@@ -584,11 +582,11 @@ export default function EmailPage() {
           setDeleteId(null);
         }}
         onConfirm={confirmDelete}
-        title="Διαγραφή Campaign"
+        title="Διαγραφή Καμπάνιας"
         description={
           deleteCampaignName
-            ? `Είστε σίγουροι ότι θέλετε να διαγράψετε το campaign \"${deleteCampaignName}\";`
-            : 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτό το campaign;'
+            ? `Είστε σίγουροι ότι θέλετε να διαγράψετε την καμπάνια "${deleteCampaignName}";`
+            : 'Είστε σίγουροι ότι θέλετε να διαγράψετε αυτή την καμπάνια;'
         }
         confirmText="Διαγραφή"
         cancelText="Ακύρωση"
@@ -606,7 +604,7 @@ export default function EmailPage() {
         }
         list={
           <OutlookList
-            items={listItems as any}
+            items={listItems}
             type={listType}
             selectedId={selectedCampaignId}
             onSelect={listType === 'templates' ? handleSelectTemplate : handleSelectCampaign}
