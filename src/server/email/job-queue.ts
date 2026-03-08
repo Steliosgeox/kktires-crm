@@ -15,8 +15,11 @@ export function getWorkerId() {
 function getLockTimeoutMs(): number {
   const raw = process.env.EMAIL_JOB_LOCK_TIMEOUT_MS;
   const n = raw ? Number.parseInt(raw, 10) : NaN;
-  // Default: 15 minutes. Vercel/serverless invocations should never keep jobs locked between runs.
-  return Number.isFinite(n) && n > 0 ? n : 15 * 60 * 1000;
+  // Default: 5 minutes. Vercel cron runs every minute; a job stuck in "processing"
+  // (e.g. because a serverless invocation was hard-killed) should be recoverable
+  // within a few cron ticks, not after 15 minutes.
+  // Must be comfortably longer than the cron function's maxDuration (60 s).
+  return Number.isFinite(n) && n > 0 ? n : 5 * 60 * 1000;
 }
 
 function parseRunAt(input: unknown): Date {

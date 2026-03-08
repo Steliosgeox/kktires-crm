@@ -106,6 +106,12 @@ function getTransport(): any {
       user: cfg.user,
       pass: cfg.pass,
     },
+    // Hard timeouts prevent SMTP hangs from blocking serverless invocations.
+    // Without these, a stalled SMTP server can hold the Vercel function open until
+    // the platform hard-kills it (60 s), leaving the email job locked for 15 min.
+    connectionTimeout: 10_000, // 10 s to establish TCP connection
+    greetingTimeout: 5_000,   // 5 s for the SMTP greeting banner
+    socketTimeout: 30_000,    // 30 s idle per socket operation
   });
 
   return transport;
@@ -166,6 +172,10 @@ export async function sendSmtpEmailDetailed(params: {
     });
     return { ok: true, provider: 'smtp', messageId: info?.messageId };
   } catch (error) {
+    // Reset the singleton so the next caller gets a fresh transport.
+    // A stale/broken transport (e.g. after a connection reset or auth error)
+    // would cause all subsequent sends to fail until a cold start.
+    transport = null;
     const message = formatSendError(error);
     console.error('SMTP send error:', error);
     return {
