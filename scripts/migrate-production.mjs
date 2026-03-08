@@ -143,6 +143,104 @@ async function run0009() {
   console.log('Migration 0009 DONE.');
 }
 
+async function run0010() {
+  console.log('\nRunning migration 0010_fix_broken_fk_references...');
+  // Root cause: SQLite auto-rewrites FK references in other tables when a referenced
+  // table is renamed. Migration 0009 renamed campaign_recipients → __old_campaign_recipients
+  // (and back), causing email_job_items, email_tracking, and email_delivery_events to
+  // reference the now-deleted __old_campaign_recipients. Fix: drop and recreate each table
+  // with the correct FK references.
+
+  await client.execute('PRAGMA foreign_keys=OFF');
+
+  // email_job_items — 0 rows on first run, safe to drop+recreate
+  await client.execute('DROP TABLE IF EXISTS email_job_items');
+  await client.execute(`
+    CREATE TABLE \`email_job_items\` (
+      \`id\` text PRIMARY KEY NOT NULL,
+      \`job_id\` text NOT NULL,
+      \`campaign_id\` text NOT NULL,
+      \`recipient_id\` text NOT NULL,
+      \`status\` text DEFAULT 'pending' NOT NULL,
+      \`sent_at\` integer,
+      \`error_message\` text,
+      \`created_at\` integer NOT NULL,
+      \`updated_at\` integer NOT NULL,
+      \`customer_id\` text,
+      \`email\` text,
+      FOREIGN KEY (\`job_id\`) REFERENCES \`email_jobs\`(\`id\`) ON UPDATE no action ON DELETE cascade,
+      FOREIGN KEY (\`campaign_id\`) REFERENCES \`email_campaigns\`(\`id\`) ON UPDATE no action ON DELETE cascade,
+      FOREIGN KEY (\`recipient_id\`) REFERENCES \`campaign_recipients\`(\`id\`) ON UPDATE no action ON DELETE cascade
+    )
+  `);
+  await client.execute('CREATE INDEX IF NOT EXISTS email_job_items_job_idx ON email_job_items (job_id)');
+  await client.execute('CREATE INDEX IF NOT EXISTS email_job_items_campaign_idx ON email_job_items (campaign_id)');
+  console.log('  Recreated email_job_items (FK fixed)');
+
+  // email_delivery_events — 0 rows, safe to drop+recreate
+  await client.execute('DROP TABLE IF EXISTS email_delivery_events');
+  await client.execute(`
+    CREATE TABLE email_delivery_events (
+      id TEXT PRIMARY KEY NOT NULL,
+      org_id TEXT NOT NULL,
+      campaign_id TEXT NOT NULL,
+      recipient_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      event_category TEXT NOT NULL,
+      failure_reason TEXT,
+      smtp_code INTEGER,
+      smtp_message TEXT,
+      diagnostic_code TEXT,
+      bounce_type TEXT,
+      bounce_subtype TEXT,
+      attempt_number INTEGER DEFAULT 1,
+      next_retry_at INTEGER,
+      retry_eligible INTEGER DEFAULT 0,
+      email_address TEXT NOT NULL,
+      domain TEXT,
+      mx_valid INTEGER,
+      dns_checked_at INTEGER,
+      occurred_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (org_id) REFERENCES organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (campaign_id) REFERENCES email_campaigns(id) ON DELETE CASCADE,
+      FOREIGN KEY (recipient_id) REFERENCES campaign_recipients(id) ON DELETE CASCADE
+    )
+  `);
+  console.log('  Recreated email_delivery_events (FK fixed)');
+
+  // email_tracking — may have data; copy-rename pattern
+  await client.execute('DROP TABLE IF EXISTS __new_email_tracking').catch(() => {});
+  await client.execute(`
+    CREATE TABLE \`__new_email_tracking\` (
+      \`id\` text PRIMARY KEY NOT NULL,
+      \`campaign_id\` text NOT NULL,
+      \`recipient_id\` text NOT NULL,
+      \`type\` text NOT NULL,
+      \`link_url\` text,
+      \`ip_address\` text,
+      \`user_agent\` text,
+      \`created_at\` integer NOT NULL,
+      FOREIGN KEY (\`campaign_id\`) REFERENCES \`email_campaigns\`(\`id\`) ON UPDATE no action ON DELETE cascade,
+      FOREIGN KEY (\`recipient_id\`) REFERENCES \`campaign_recipients\`(\`id\`) ON UPDATE no action ON DELETE cascade
+    )
+  `);
+  await client.execute(
+    'INSERT INTO __new_email_tracking SELECT id, campaign_id, recipient_id, type, link_url, ip_address, user_agent, created_at FROM email_tracking'
+  );
+  const cnt = await client.execute('SELECT COUNT(*) FROM __new_email_tracking');
+  console.log('  Copied', cnt.rows[0][0], 'rows into new email_tracking');
+  await client.execute('DROP TABLE email_tracking');
+  await client.execute('ALTER TABLE __new_email_tracking RENAME TO email_tracking');
+  await client.execute('CREATE INDEX IF NOT EXISTS tracking_campaign_type_idx ON email_tracking (campaign_id, type)');
+  console.log('  Recreated email_tracking with data (FK fixed)');
+
+  await client.execute('PRAGMA foreign_keys=ON');
+  await recordMigration('0010_fix_broken_fk_references');
+  console.log('  Recorded migration 0010');
+  console.log('Migration 0010 DONE.');
+}
+
 async function verify() {
   const cols = await client.execute('PRAGMA table_info(campaign_recipients)');
   const cust = cols.rows.find(r => r[1] === 'customer_id');
@@ -154,8 +252,14 @@ async function verify() {
   console.log('  display_name exists:', !!disp);
   const seg = await client.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="segment_customers"');
   console.log('  segment_customers exists:', seg.rows.length > 0);
+
+  const oldRefs = await client.execute("SELECT name FROM sqlite_master WHERE sql LIKE '%__old%'");
+  const broken = oldRefs.rows.map(r => r[0]);
+  console.log('  FK __old refs remaining:', broken.length === 0 ? 'NONE (correct!)' : broken.join(', '));
+
   const applied = await getAppliedMigrations();
   console.log('  0009 recorded:', applied.has('0009_manual_recipients_and_segment_members'));
+  console.log('  0010 recorded:', applied.has('0010_fix_broken_fk_references'));
 }
 
 async function main() {
@@ -166,6 +270,12 @@ async function main() {
     await run0009();
   } else {
     console.log('Migration 0009 already applied, skipping.');
+  }
+
+  if (!applied.has('0010_fix_broken_fk_references')) {
+    await run0010();
+  } else {
+    console.log('Migration 0010 already applied, skipping.');
   }
 
   await verify();
