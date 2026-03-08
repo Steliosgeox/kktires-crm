@@ -194,6 +194,21 @@ export async function markEmailJobCompleted(jobId: string) {
     .where(eq(emailJobs.id, jobId));
 }
 
+// Turso/libsql embeds the full SQL in error messages for batch queries:
+// "Failed query: INSERT INTO ... values (?, ...) : SQLITE_UNKNOWN: <reason>"
+// The actual error reason is at the END. Naively slicing to 1000 chars stores
+// only the SQL — the cause is invisible. Extract the meaningful part instead.
+function extractJobError(error: string): string {
+  if (error.length <= 1000) return error;
+  // Find the SQLITE error code which appears after the SQL
+  const idx = error.lastIndexOf(': SQLITE_');
+  if (idx !== -1 && error.length - idx < 800) {
+    return error.slice(idx + 2).slice(0, 1000);
+  }
+  // Fallback: take the tail where the reason typically lives
+  return '...' + error.slice(-997);
+}
+
 export async function markEmailJobFailed(jobId: string, error: string) {
   const now = new Date();
   await db
@@ -202,7 +217,7 @@ export async function markEmailJobFailed(jobId: string, error: string) {
       status: 'failed',
       completedAt: now,
       updatedAt: now,
-      lastError: error.slice(0, 1000),
+      lastError: extractJobError(error),
       lockedAt: null,
       lockedBy: null,
       attempts: sql`${emailJobs.attempts} + 1`,

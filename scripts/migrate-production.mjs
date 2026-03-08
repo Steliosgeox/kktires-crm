@@ -262,6 +262,42 @@ async function verify() {
   console.log('  0010 recorded:', applied.has('0010_fix_broken_fk_references'));
 }
 
+/**
+ * Safety net: detect any table whose FK references point to a temp/renamed table.
+ * Uses PRAGMA foreign_key_list (not SQL text search) to read actual FK metadata —
+ * this is reliable regardless of quoting or formatting in sqlite_master.sql.
+ *
+ * Catches the exact class of bug that caused migration 0010: SQLite silently
+ * rewrites FK references when a referenced table is renamed, leaving dangling
+ * pointers after the old table is dropped. If ANY are found, the build FAILS
+ * so the problem is caught at deploy time, not silently in production.
+ */
+async function assertNobrokenFkReferences() {
+  const tables = await client.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'"
+  );
+
+  const broken = [];
+  for (const row of tables.rows) {
+    const tableName = String(row[0]);
+    const fks = await client.execute(`PRAGMA foreign_key_list("${tableName}")`);
+    for (const fk of fks.rows) {
+      const referenced = String(fk[2]); // column 2 = referenced table name
+      if (referenced.includes('__old') || referenced.includes('__new')) {
+        broken.push(`${tableName} → ${referenced}`);
+      }
+    }
+  }
+
+  if (broken.length > 0) {
+    throw new Error(
+      `DEPLOY BLOCKED: broken FK references detected:\n  ${broken.join('\n  ')}\n` +
+      'Add a migration (like 0010) to recreate these tables with correct FK references.'
+    );
+  }
+  console.log('  FK integrity check: PASS (no broken references)');
+}
+
 async function main() {
   const applied = await getAppliedMigrations();
   console.log('Applied migrations:', [...applied].join(', '));
@@ -279,6 +315,11 @@ async function main() {
   }
 
   await verify();
+
+  // Hard stop if any table still has broken FK references.
+  // This runs on EVERY deploy — if a future migration leaves dangling FKs, the
+  // build fails here and never reaches production.
+  await assertNobrokenFkReferences();
 }
 
 main().catch(err => { console.error('FATAL:', err.message); process.exit(1); });
