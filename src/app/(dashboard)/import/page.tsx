@@ -2,8 +2,8 @@
 
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Upload, FileSpreadsheet, FileText, Check, X, AlertCircle,
+import {
+  Upload, FileSpreadsheet, Check, X, AlertCircle,
   ArrowRight, ArrowLeft, Download, Users, Eye, RefreshCw
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
@@ -35,7 +35,7 @@ const DB_FIELDS = [
 
 export default function ImportPage() {
   const [step, setStep] = useState(1);
-  const [file, setFile] = useState<File | null>(null);
+  const [_file, setFile] = useState<File | null>(null);
   const [csvData, setCsvData] = useState<string[][]>([]);
   const [fieldMappings, setFieldMappings] = useState<ImportField[]>([]);
   const [importing, setImporting] = useState(false);
@@ -149,7 +149,6 @@ export default function ImportPage() {
 
     try {
       // Prepare data for import
-      const headers = csvData[0];
       const rows = csvData.slice(1);
       
       const customers = rows.map(row => {

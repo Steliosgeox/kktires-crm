@@ -23,18 +23,13 @@ import {
   Tag,
   Users,
   GitBranch,
-  Plus,
   Trash2,
   Play,
-  Pause,
   Save,
-  Settings,
 } from 'lucide-react';
-import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassModal } from '@/components/ui/glass-modal';
-import { GlassBadge } from '@/components/ui/glass-badge';
 
 // Custom node types
 const nodeTypes = {
@@ -139,7 +134,7 @@ interface AutomationBuilderProps {
 }
 
 export function AutomationBuilder({
-  automationId,
+  automationId: _automationId,
   initialNodes = [],
   initialEdges = [],
   onSave,

@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { customers, tags, customerTags, organizations } from '@/lib/db/schema';
 import { getOrgIdFromSession, hasRole, requireSession } from '@/server/authz';
 import { nanoid } from 'nanoid';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { createRequestId, jsonError, withValidatedBody } from '@/server/api/http';
 import { z } from 'zod';
 import {

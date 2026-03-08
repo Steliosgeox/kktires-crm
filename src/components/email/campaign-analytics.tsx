@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart3,
   TrendingUp,
-  TrendingDown,
   MailOpen,
   MousePointerClick,
   Send,
@@ -12,7 +11,6 @@ import {
   Clock,
   AlertTriangle,
   RefreshCw,
-  Calendar,
   Globe,
   Smartphone,
   Monitor,

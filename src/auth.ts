@@ -4,7 +4,7 @@ import Nodemailer from 'next-auth/providers/nodemailer';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { db, isDatabaseConfigured } from '@/lib/db';
 import { accounts, organizationMembers, organizations, sessions, users, verificationTokens } from '@/lib/db/schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { encryptAccountTokens } from '@/server/crypto/oauth-tokens';
 
@@ -123,7 +123,6 @@ const authExports = isDatabaseConfigured
   ? NextAuth({
   secret: getAuthSecret(),
   trustHost: getTrustHost(),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   adapter: (() => {
     // Wrap the adapter so OAuth tokens are encrypted at rest when configured.
     // Decryption happens only where the app needs to use them (e.g. Gmail send/refresh).

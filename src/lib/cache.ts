@@ -1,7 +1,7 @@
 import { unstable_cache } from 'next/cache';
 import { db } from '@/lib/db';
-import { customers, tags, emailCampaigns, emailTemplates, tasks, leads, segments } from '@/lib/db/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { customers, tags, emailCampaigns, leads } from '@/lib/db/schema';
+import { eq, sql } from 'drizzle-orm';
 
 const DEFAULT_ORG_ID = 'org_kktires';
 

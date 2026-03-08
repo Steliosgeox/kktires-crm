@@ -13,7 +13,6 @@ async function main() {
 
   console.log(`[email-worker] started workerId=${workerId} pollMs=${pollMs} once=${once}`);
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const result = await processDueEmailJobs({

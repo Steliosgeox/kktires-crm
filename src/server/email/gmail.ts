@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { accounts } from '@/lib/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { decryptAccountToken, encryptOAuthToken } from '@/server/crypto/oauth-tokens';
 
 export interface EmailPayload {

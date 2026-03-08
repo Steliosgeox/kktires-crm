@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { emailCampaigns, emailTracking, campaignRecipients } from '@/lib/db/schema';
+import { emailTracking, campaignRecipients } from '@/lib/db/schema';
 import { eq, and, gte, desc, sql } from 'drizzle-orm';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 

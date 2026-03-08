@@ -123,7 +123,7 @@ function normalizeFileName(name: string): string {
   return clean || 'file';
 }
 
-function toAssetKind(kind: string): AssetKind {
+function _toAssetKind(kind: string): AssetKind {
   return kind === 'image' ? 'image' : 'file';
 }
 

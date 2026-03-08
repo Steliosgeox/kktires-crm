@@ -2,20 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import {
-  BarChart3,
   TrendingUp,
-  TrendingDown,
   Users,
   Mail,
   DollarSign,
-  Calendar,
   ArrowUpRight,
   ArrowDownRight,
   RefreshCw,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
-import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassTabs, GlassTabsList, GlassTabsTrigger } from '@/components/ui/glass-tabs';
 import { GlassProgressCircle } from '@/components/ui/glass-progress';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
@@ -120,7 +116,7 @@ function KpiCard({
 export default function StatisticsPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('month');
+  const [_period, setPeriod] = useState('month');
 
   useEffect(() => {
     fetchStats();

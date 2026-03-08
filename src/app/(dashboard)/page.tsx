@@ -5,7 +5,6 @@ import { Users, UserPlus, Mail, TrendingUp, Calendar, CheckSquare, RefreshCw } f
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassButton } from '@/components/ui/glass-button';
-import { GlassProgress } from '@/components/ui/glass-progress';
 import { GlassSkeleton } from '@/components/ui/glass-skeleton';
 import { formatCurrency } from '@/lib/utils';
 
@@ -95,39 +94,6 @@ function KpiCard({
         </div>
       </div>
     </GlassCard>
-  );
-}
-
-// Activity Item Component
-function ActivityItem({
-  title,
-  description,
-  time,
-  type,
-}: {
-  title: string;
-  description: string;
-  time: string;
-  type: 'customer' | 'email' | 'task';
-}) {
-  const icons = {
-    customer: Users,
-    email: Mail,
-    task: CheckSquare,
-  };
-  const Icon = icons[type];
-
-  return (
-    <div className="flex items-start gap-4 py-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.05]">
-        <Icon className="h-4 w-4 text-white/60" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-white">{title}</p>
-        <p className="text-xs text-white/50 truncate">{description}</p>
-      </div>
-      <span className="text-xs text-white/40 whitespace-nowrap">{time}</span>
-    </div>
   );
 }
 
