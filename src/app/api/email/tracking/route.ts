@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { emailTracking, campaignRecipients, emailCampaigns } from '@/lib/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { emailTracking, emailCampaigns } from '@/lib/db/schema';
+import { eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { safeEqual, signTrackingValue } from '@/server/email/tracking';
 

@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Download, FileSpreadsheet, Users, Calendar, Check, RefreshCw,
-  Filter, ChevronDown
+import {
+  Download, FileSpreadsheet, Check, RefreshCw,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';

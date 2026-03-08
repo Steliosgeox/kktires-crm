@@ -35,13 +35,22 @@ const campaignStatusSchema = z.enum([
   'failed',
 ]);
 
+const recipientFiltersSchema = z.object({
+  cities: z.array(z.string().trim().min(1).max(120)).max(5_000).optional(),
+  tags: z.array(z.string().trim().min(1).max(80)).max(5_000).optional(),
+  segments: z.array(z.string().trim().min(1).max(80)).max(5_000).optional(),
+  categories: z.array(z.string().trim().min(1).max(80)).max(5_000).optional(),
+  customerIds: z.array(z.string().trim().min(1).max(80)).max(10_000).optional(),
+  rawEmails: z.array(z.string().trim().email().max(254)).max(10_000).optional(),
+}).strict();
+
 const campaignUpdateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   subject: z.string().trim().max(300).optional(),
   content: z.string().max(1_000_000).optional(),
   status: campaignStatusSchema.optional(),
   scheduledAt: z.string().datetime().optional().nullable(),
-  recipientFilters: z.unknown().optional(),
+  recipientFilters: recipientFiltersSchema.optional(),
   signatureId: z.string().trim().max(64).optional().nullable(),
   assets: z
     .object({

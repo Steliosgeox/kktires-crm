@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import {
-  Map as MapIcon,
   Search,
   Layers,
   Navigation,

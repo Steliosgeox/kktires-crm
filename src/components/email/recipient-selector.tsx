@@ -1,19 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Users, Tag, FolderKanban, MapPin, Filter, Check, X, ChevronDown, Search } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Users, Tag, FolderKanban, MapPin, Check, X, Search } from 'lucide-react';
+import useSWR from 'swr';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassBadge } from '@/components/ui/glass-badge';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassTabs, GlassTabsList, GlassTabsTrigger, GlassTabsContent } from '@/components/ui/glass-tabs';
-
-interface RecipientFilters {
-  cities: string[];
-  tags: string[];
-  segments: string[];
-  categories: string[];
-}
+import { hasRecipientSelection, type RecipientFilters } from '@/lib/email/recipient-filters';
 
 interface RecipientSelectorProps {
   filters: RecipientFilters;
@@ -39,108 +34,68 @@ interface CityData {
   count: number;
 }
 
+const fetchJson = async <T,>(url: string): Promise<T> => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+};
+
 export function RecipientSelector({ filters, onChange, onPreview }: RecipientSelectorProps) {
-  const [cities, setCities] = useState<CityData[]>([]);
-  const [tags, setTags] = useState<TagData[]>([]);
-  const [segments, setSegments] = useState<SegmentData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [searchQueries, setSearchQueries] = useState({
     cities: '',
     tags: '',
     segments: '',
   });
 
-  // Fetch all filter options - with abort controller to prevent memory leaks
-  useEffect(() => {
-    let isMounted = true;
-    const abortController = new AbortController();
-    
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [locationsRes, tagsRes, segmentsRes] = await Promise.all([
-          fetch('/api/customers/locations', { signal: abortController.signal }),
-          fetch('/api/tags', { signal: abortController.signal }),
-          fetch('/api/segments', { signal: abortController.signal }),
-        ]);
+  const { data: locationsData, isLoading: locationsLoading } = useSWR<{ cities?: Array<{ name: string; count: number }> }>(
+    '/api/customers/locations',
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
+  const { data: tagsData, isLoading: tagsLoading } = useSWR<{ tags?: TagData[] }>(
+    '/api/tags',
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
+  const { data: segmentsData, isLoading: segmentsLoading } = useSWR<{ segments?: SegmentData[] }>(
+    '/api/segments',
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
 
-        // Don't update state if component unmounted
-        if (!isMounted) return;
+  const cities = useMemo<CityData[]>(
+    () =>
+      (locationsData?.cities || []).map((entry) => ({
+        city: entry.name,
+        count: entry.count,
+      })),
+    [locationsData]
+  );
+  const tags = tagsData?.tags || [];
+  const segments = segmentsData?.segments || [];
+  const loading = locationsLoading || tagsLoading || segmentsLoading;
 
-        if (locationsRes.ok) {
-          const data = await locationsRes.json();
-          // FIX: API returns 'cities' array directly, not 'locations' with city property
-          const cityArray = (data.cities || []).map((c: { name: string; count: number }) => ({
-            city: c.name,
-            count: c.count,
-          }));
-          if (isMounted) setCities(cityArray);
-        }
+  const recipientCountKey = useMemo(() => {
+    if (!hasRecipientSelection(filters)) return null;
 
-        if (tagsRes.ok) {
-          const data = await tagsRes.json();
-          if (isMounted) setTags(data.tags || []);
-        }
-
-        if (segmentsRes.ok) {
-          const data = await segmentsRes.json();
-          if (isMounted) setSegments(data.segments || []);
-        }
-      } catch (error) {
-        // Ignore abort errors
-        if (error instanceof Error && error.name === 'AbortError') return;
-        console.error('Error fetching filter options:', error);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchData();
-    
-    // Cleanup on unmount - cancel pending requests
-    return () => {
-      isMounted = false;
-      abortController.abort();
-    };
-  }, []);
-
-  // Calculate recipient count when filters change - with cleanup
-  useEffect(() => {
-    let isMounted = true;
-    const abortController = new AbortController();
-    
-    const calculateRecipients = async () => {
-      // If no filters, show total with email
-      if (!filters.cities.length && !filters.tags.length && !filters.segments.length) {
-        if (isMounted) setRecipientCount(null);
-        return;
-      }
-
-      try {
-        const params = new URLSearchParams();
-        if (filters.cities.length) params.set('cities', filters.cities.join(','));
-        if (filters.tags.length) params.set('tags', filters.tags.join(','));
-        if (filters.segments.length) params.set('segments', filters.segments.join(','));
-
-        const response = await fetch(`/api/recipients/count?${params}`, { signal: abortController.signal });
-        if (response.ok && isMounted) {
-          const data = await response.json();
-          setRecipientCount(data.count);
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return;
-        console.error('Error calculating recipients:', error);
-      }
-    };
-
-    calculateRecipients();
-    
-    return () => {
-      isMounted = false;
-      abortController.abort();
-    };
+    const params = new URLSearchParams();
+    if (filters.cities.length) params.set('cities', filters.cities.join(','));
+    if (filters.tags.length) params.set('tags', filters.tags.join(','));
+    if (filters.segments.length) params.set('segments', filters.segments.join(','));
+    if (filters.categories.length) params.set('categories', filters.categories.join(','));
+    if (filters.customerIds.length) params.set('customerIds', filters.customerIds.join(','));
+    if (filters.rawEmails.length) params.set('rawEmails', filters.rawEmails.join(','));
+    return `/api/recipients/count?${params.toString()}`;
   }, [filters]);
+
+  const { data: recipientCountData } = useSWR<{ count?: number }>(
+    recipientCountKey,
+    fetchJson,
+    { revalidateOnFocus: false }
+  );
+  const recipientCount = recipientCountData?.count ?? null;
 
   const toggleCity = (city: string) => {
     const newCities = filters.cities.includes(city)
@@ -164,10 +119,15 @@ export function RecipientSelector({ filters, onChange, onPreview }: RecipientSel
   };
 
   const clearAllFilters = () => {
-    onChange({ cities: [], tags: [], segments: [], categories: [] });
+    onChange({ cities: [], tags: [], segments: [], categories: [], customerIds: [], rawEmails: [] });
   };
 
-  const totalFilters = filters.cities.length + filters.tags.length + filters.segments.length;
+  const totalFilters = filters.cities.length
+    + filters.tags.length
+    + filters.segments.length
+    + filters.categories.length
+    + filters.customerIds.length
+    + filters.rawEmails.length;
 
   const filteredCities = cities.filter((c) =>
     c.city.toLowerCase().includes(searchQueries.cities.toLowerCase())

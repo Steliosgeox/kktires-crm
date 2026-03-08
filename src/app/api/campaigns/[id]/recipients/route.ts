@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
-import { campaignRecipients, customers, emailCampaigns } from '@/lib/db/schema';
+import { campaignRecipients, customers } from '@/lib/db/schema';
 import { createRequestId, handleApiError, jsonError } from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 

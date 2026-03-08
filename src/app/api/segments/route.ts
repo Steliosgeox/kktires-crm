@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   and,
-  count,
   eq,
   gt,
   gte,
+  inArray,
   like,
   lt,
   lte,
@@ -15,7 +15,7 @@ import {
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
-import { customers, db, segments } from '@/lib/db';
+import { customers, db, segmentCustomers, segments } from '@/lib/db';
 import { createRequestId, handleApiError, withValidatedBody } from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
@@ -25,6 +25,7 @@ const SEGMENTABLE_COLUMNS = {
   company: customers.company,
   email: customers.email,
   city: customers.city,
+  country: customers.country,
   category: customers.category,
   lifecycleStage: customers.lifecycleStage,
   revenue: customers.revenue,
@@ -62,6 +63,7 @@ const SegmentCreateSchema = z.object({
   name: z.string().trim().min(1).max(160),
   description: z.string().trim().max(1_000).nullable().optional(),
   filters: SegmentFiltersSchema.nullable().optional(),
+  staticCustomerIds: z.array(z.string().trim().min(1).max(80)).max(10_000).optional(),
 });
 
 function buildCondition(condition: z.infer<typeof SegmentConditionSchema>): SQL | null {
@@ -108,7 +110,26 @@ function buildWhereForFilters(
     : (and(eq(customers.orgId, orgId), ...built) as SQL);
 }
 
-// GET /api/segments - Get all segments with customer counts
+async function getDynamicCustomerIds(
+  orgId: string,
+  filters: z.infer<typeof SegmentFiltersSchema> | null | undefined
+): Promise<string[]> {
+  if (!filters || filters.conditions.length === 0) return [];
+  const where = buildWhereForFilters(orgId, filters);
+  const rows = await db.select({ id: customers.id }).from(customers).where(where);
+  return rows.map((row) => row.id);
+}
+
+async function getStaticCustomerIds(orgId: string, segmentId: string): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ customerId: segmentCustomers.customerId })
+    .from(segmentCustomers)
+    .innerJoin(customers, eq(customers.id, segmentCustomers.customerId))
+    .where(and(eq(segmentCustomers.segmentId, segmentId), eq(customers.orgId, orgId)));
+  return rows.map((row) => row.customerId);
+}
+
+// GET /api/segments - Get all segments with resolved customer counts
 export async function GET() {
   const requestId = createRequestId();
   try {
@@ -129,11 +150,27 @@ export async function GET() {
     const segmentsWithCounts = await Promise.all(
       allSegments.map(async (segment) => {
         try {
-          const where = buildWhereForFilters(orgId, SegmentFiltersSchema.nullish().parse(segment.filters));
-          const [result] = await db.select({ count: count() }).from(customers).where(where);
-          return { ...segment, customerCount: result?.count || 0 };
+          const parsedFilters = SegmentFiltersSchema.nullish().parse(segment.filters);
+          const [dynamicIds, staticIds] = await Promise.all([
+            getDynamicCustomerIds(orgId, parsedFilters),
+            getStaticCustomerIds(orgId, segment.id),
+          ]);
+          const resolved = new Set([...dynamicIds, ...staticIds]);
+          return {
+            ...segment,
+            dynamicCount: dynamicIds.length,
+            staticCount: staticIds.length,
+            customerCount: resolved.size,
+            staticCustomerIds: staticIds,
+          };
         } catch {
-          return { ...segment, customerCount: 0 };
+          return {
+            ...segment,
+            dynamicCount: 0,
+            staticCount: 0,
+            customerCount: 0,
+            staticCustomerIds: [] as string[],
+          };
         }
       })
     );
@@ -158,24 +195,63 @@ export async function POST(request: NextRequest) {
       );
     }
     const orgId = getOrgIdFromSession(session);
-    const body = await withValidatedBody(request, SegmentCreateSchema, { maxBytes: 120_000 });
+    const body = await withValidatedBody(request, SegmentCreateSchema, { maxBytes: 300_000 });
+
+    const staticCustomerIds = Array.from(new Set(body.staticCustomerIds || []));
+    if (staticCustomerIds.length > 0) {
+      const validCustomers = await db
+        .select({ id: customers.id })
+        .from(customers)
+        .where(and(eq(customers.orgId, orgId), inArray(customers.id, staticCustomerIds)));
+      if (validCustomers.length !== staticCustomerIds.length) {
+        return NextResponse.json(
+          { error: 'Some selected customers do not belong to this organization', code: 'BAD_REQUEST', requestId },
+          { status: 400 }
+        );
+      }
+    }
+
+    const parsedFilters = body.filters || null;
+    const dynamicIds = await getDynamicCustomerIds(orgId, parsedFilters);
+    const resolvedCount = new Set([...dynamicIds, ...staticCustomerIds]).size;
+
+    const segmentId = nanoid();
     const now = new Date();
 
     const [newSegment] = await db
       .insert(segments)
       .values({
-        id: nanoid(),
+        id: segmentId,
         orgId,
         name: body.name,
         description: body.description || null,
-        filters: body.filters || null,
-        customerCount: 0,
+        filters: parsedFilters,
+        customerCount: resolvedCount,
+        createdBy: session.user.id,
         createdAt: now,
         updatedAt: now,
       })
       .returning();
 
-    return NextResponse.json({ segment: newSegment, requestId });
+    if (staticCustomerIds.length > 0) {
+      await db.insert(segmentCustomers).values(
+        staticCustomerIds.map((customerId) => ({
+          id: `scm_${nanoid()}`,
+          segmentId,
+          customerId,
+          createdAt: now,
+        }))
+      );
+    }
+
+    return NextResponse.json({
+      segment: {
+        ...newSegment,
+        staticCustomerIds,
+        customerCount: resolvedCount,
+      },
+      requestId,
+    });
   } catch (error) {
     return handleApiError('segments:post', error, requestId, {
       message: 'Failed to create segment',

@@ -64,6 +64,13 @@
       "when": 1739634000002,
       "tag": "0008_performance_optimization",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1739966400000,
+      "tag": "0009_manual_recipients_and_segment_members",
+      "breakpoints": true
     }
   ]
 }

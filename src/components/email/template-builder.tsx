@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Type,
   Image,
   Columns,
   Square,
-  Link as LinkIcon,
   Heading1,
   AlignLeft,
   AlignCenter,
@@ -21,9 +20,7 @@ import {
   Monitor,
   Plus,
   Settings,
-  Palette,
 } from 'lucide-react';
-import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
 import { GlassInput } from '@/components/ui/glass-input';
 import { GlassModal } from '@/components/ui/glass-modal';

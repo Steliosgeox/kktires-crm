@@ -10,7 +10,7 @@
 
 // Extract the visibility change handler logic for testing
 // This is the core logic from AuroraBackground component
-function createVisibilityHandler(getElement: () => { style: { animationPlayState: string } } | null) {
+function _createVisibilityHandler(getElement: () => { style: { animationPlayState: string } } | null) {
     return (isHidden: boolean) => {
         const element = getElement();
         if (element) {

@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { campaignRecipients, customers, emailCampaigns, emailJobs, emailJobItems } from '@/lib/db/schema';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { claimNextDueEmailJob, markEmailJobCompleted, markEmailJobFailed, yieldEmailJob } from './job-queue';
@@ -76,18 +76,29 @@ async function ensureCampaignRecipientsSnapshot(job: EmailJobRow, campaign: type
       const recipients = await selectRecipients(job.orgId, campaign.recipientFilters || {});
       if (recipients.length > existingCount) {
         const existing = await db
-          .select({ customerId: campaignRecipients.customerId })
+          .select({
+            customerId: campaignRecipients.customerId,
+            email: campaignRecipients.email,
+          })
           .from(campaignRecipients)
           .where(eq(campaignRecipients.campaignId, job.campaignId));
-        const existingSet = new Set(existing.map((r) => r.customerId));
+        const existingCustomerIds = new Set(existing.map((r) => r.customerId).filter(Boolean));
+        const existingEmails = new Set(existing.map((r) => r.email.trim().toLowerCase()));
 
-        const missing = recipients.filter((r) => !existingSet.has(r.id));
+        const missing = recipients.filter((r) => {
+          const emailKey = r.email.trim().toLowerCase();
+          if (existingEmails.has(emailKey)) return false;
+          if (r.customerId && existingCustomerIds.has(r.customerId)) return false;
+          return true;
+        });
         if (missing.length > 0) {
           const rows = missing.map((r) => ({
             id: `rcpt_${nanoid()}`,
             campaignId: job.campaignId,
-            customerId: r.id,
+            customerId: r.customerId,
             email: r.email,
+            recipientSource: r.recipientSource,
+            displayName: r.displayName,
             status: 'pending' as const,
             sentAt: null,
             errorMessage: null,
@@ -128,8 +139,10 @@ async function ensureCampaignRecipientsSnapshot(job: EmailJobRow, campaign: type
   const rows = recipients.map((r) => ({
     id: `rcpt_${nanoid()}`,
     campaignId: job.campaignId,
-    customerId: r.id,
+    customerId: r.customerId,
     email: r.email,
+    recipientSource: r.recipientSource,
+    displayName: r.displayName,
     status: 'pending' as const,
     sentAt: null,
     errorMessage: null,
@@ -375,13 +388,16 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
       })
       .from(emailJobItems)
       .innerJoin(campaignRecipients, eq(campaignRecipients.id, emailJobItems.recipientId))
-      .innerJoin(customers, eq(customers.id, campaignRecipients.customerId))
+      .leftJoin(customers, eq(customers.id, campaignRecipients.customerId))
       .where(
         and(
           eq(emailJobItems.jobId, job.id),
           eq(emailJobItems.status, 'pending'),
           eq(campaignRecipients.status, 'pending'),
-          eq(customers.orgId, job.orgId)
+          or(
+            eq(campaignRecipients.recipientSource, 'manual_email'),
+            eq(customers.orgId, job.orgId)
+          )
         )
       )
       .orderBy(asc(emailJobItems.createdAt))

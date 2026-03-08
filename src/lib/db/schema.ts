@@ -358,6 +358,8 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
     tags: string[];
     segments: string[];
     categories: string[];
+    customerIds: string[];
+    rawEmails: string[];
   }>(),
   scheduledAt: integer('scheduled_at', { mode: 'timestamp' }),
   sentAt: integer('sent_at', { mode: 'timestamp' }),
@@ -423,8 +425,10 @@ export const campaignAssets = sqliteTable('campaign_assets', {
 export const campaignRecipients = sqliteTable('campaign_recipients', {
   id: text('id').primaryKey(),
   campaignId: text('campaign_id').notNull().references(() => emailCampaigns.id, { onDelete: 'cascade' }),
-  customerId: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  customerId: text('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   email: text('email').notNull(),
+  recipientSource: text('recipient_source').notNull().default('customer'), // customer | manual_email
+  displayName: text('display_name'),
   status: text('status').notNull().default('pending'), // pending, sent, failed, bounced
   sentAt: integer('sent_at', { mode: 'timestamp' }),
   errorMessage: text('error_message'),
@@ -444,6 +448,7 @@ export const campaignRecipients = sqliteTable('campaign_recipients', {
   campaignIdx: index('recipients_campaign_idx').on(table.campaignId),
   campaignStatusIdx: index('idx_recipients_campaign_status').on(table.campaignId, table.status),
   statusRetryIdx: index('idx_recipients_status_retry').on(table.status, table.nextRetryAt),
+  sourceIdx: index('idx_recipients_source').on(table.recipientSource),
 }));
 
 // ============================================
@@ -859,6 +864,20 @@ export const segments = sqliteTable('segments', {
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
 });
 
+export const segmentCustomers = sqliteTable('segment_customers', {
+  id: text('id').primaryKey(),
+  segmentId: text('segment_id').notNull().references(() => segments.id, { onDelete: 'cascade' }),
+  customerId: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+}, (table) => ({
+  segmentCustomerUidx: uniqueIndex('segment_customers_segment_customer_uidx').on(
+    table.segmentId,
+    table.customerId
+  ),
+  segmentIdx: index('segment_customers_segment_idx').on(table.segmentId),
+  customerIdx: index('segment_customers_customer_idx').on(table.customerId),
+}));
+
 // ============================================
 // RELATIONS
 // ============================================
@@ -867,6 +886,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   members: many(organizationMembers),
   customers: many(customers),
   tags: many(tags),
+  segments: many(segments),
   templates: many(emailTemplates),
   campaigns: many(emailCampaigns),
 }));
@@ -885,6 +905,7 @@ export const customersRelations = relations(customers, ({ one, many }) => ({
   notes: many(customerNotes),
   activities: many(customerActivities),
   tags: many(customerTags),
+  segmentCustomers: many(segmentCustomers),
   tasks: many(tasks),
   images: many(customerImages),
 }));
@@ -908,6 +929,25 @@ export const customerTagsRelations = relations(customerTags, ({ one }) => ({
   }),
 }));
 
+export const segmentsRelations = relations(segments, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [segments.orgId],
+    references: [organizations.id],
+  }),
+  members: many(segmentCustomers),
+}));
+
+export const segmentCustomersRelations = relations(segmentCustomers, ({ one }) => ({
+  segment: one(segments, {
+    fields: [segmentCustomers.segmentId],
+    references: [segments.id],
+  }),
+  customer: one(customers, {
+    fields: [segmentCustomers.customerId],
+    references: [customers.id],
+  }),
+}));
+
 // Export types
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
@@ -917,6 +957,10 @@ export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
+export type Segment = typeof segments.$inferSelect;
+export type NewSegment = typeof segments.$inferInsert;
+export type SegmentCustomer = typeof segmentCustomers.$inferSelect;
+export type NewSegmentCustomer = typeof segmentCustomers.$inferInsert;
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 export type EmailCampaign = typeof emailCampaigns.$inferSelect;

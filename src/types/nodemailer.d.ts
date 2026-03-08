@@ -9,7 +9,6 @@ declare module 'nodemailer' {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function createTransport(...args: any[]): Transporter;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodemailer: { createTransport: typeof createTransport };
 
   // Support `import nodemailer from "nodemailer"` with esModuleInterop.
