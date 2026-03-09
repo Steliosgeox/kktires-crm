@@ -133,6 +133,28 @@ const CAMPAIGN_ASSETS_COLUMNS: ColumnDef[] = [
   { name: 'updated_at', type: 'integer' },
 ];
 
+const CAMPAIGN_RECIPIENTS_COLUMNS: ColumnDef[] = [
+  { name: 'id', type: 'text' },
+  { name: 'campaign_id', type: 'text' },
+  { name: 'customer_id', type: 'text' },
+  { name: 'email', type: 'text' },
+  { name: 'recipient_source', type: 'text', defaultValue: "'customer'" },
+  { name: 'display_name', type: 'text' },
+  { name: 'status', type: 'text', defaultValue: "'pending'" },
+  { name: 'sent_at', type: 'integer' },
+  { name: 'error_message', type: 'text' },
+  { name: 'failure_category', type: 'text' },
+  { name: 'failure_reason_detailed', type: 'text' },
+  { name: 'bounce_type', type: 'text' },
+  { name: 'attempt_count', type: 'integer', defaultValue: '0' },
+  { name: 'last_attempt_at', type: 'integer' },
+  { name: 'next_retry_at', type: 'integer' },
+  { name: 'mx_valid', type: 'integer' },
+  { name: 'dns_checked_at', type: 'integer' },
+  { name: 'email_normalized', type: 'text' },
+  { name: 'domain', type: 'text' },
+];
+
 // ── Runtime heal logic ───────────────────────────────────────────────────────
 
 interface PragmaRow {
@@ -210,6 +232,9 @@ export async function healEmailCampaignSchema(): Promise<string[]> {
 
   // email_campaigns — add any missing columns
   actions.push(...await addMissingColumns('email_campaigns', EMAIL_CAMPAIGNS_COLUMNS));
+
+  // campaign_recipients — add any missing columns (e.g. recipient_source, display_name from migration 0009)
+  actions.push(...await addMissingColumns('campaign_recipients', CAMPAIGN_RECIPIENTS_COLUMNS));
 
   // email_assets + campaign_assets
   actions.push(...await ensureTable('email_assets', EMAIL_ASSETS_COLUMNS));
