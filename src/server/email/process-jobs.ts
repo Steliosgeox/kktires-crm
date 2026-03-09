@@ -281,6 +281,7 @@ async function finalizeCampaignIfDone(job: EmailJobRow) {
       sentAt: now,
       totalRecipients: total,
       sentCount: sent,
+      bounceCount: failed,
       updatedAt: now,
     })
     .where(eq(emailCampaigns.id, job.campaignId))
