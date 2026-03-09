@@ -11,9 +11,6 @@ import {
   Clock,
   AlertTriangle,
   RefreshCw,
-  Globe,
-  Smartphone,
-  Monitor,
 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 import { GlassButton } from '@/components/ui/glass-button';
@@ -63,7 +60,7 @@ export function CampaignAnalytics({ campaignId }: CampaignAnalyticsProps) {
 
       if (statsRes.ok) {
         const data = await statsRes.json();
-        setStats(data.campaign);
+        setStats(data);
       }
 
       if (eventsRes.ok) {
@@ -101,13 +98,6 @@ export function CampaignAnalytics({ campaignId }: CampaignAnalyticsProps) {
   const deliveryRate = stats.totalRecipients > 0 
     ? (((stats.sentCount - stats.bounceCount) / stats.totalRecipients) * 100).toFixed(1) 
     : '0';
-
-  // Device breakdown simulation (would come from real data)
-  const deviceBreakdown = {
-    desktop: 45,
-    mobile: 48,
-    tablet: 7,
-  };
 
   // Time breakdown for opens
   const opensByHour = events
@@ -230,88 +220,30 @@ export function CampaignAnalytics({ campaignId }: CampaignAnalyticsProps) {
         </GlassCard>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Device Breakdown */}
-        <GlassCard>
-          <h3 className="font-medium text-white mb-4 flex items-center gap-2">
-            <Monitor className="h-4 w-4 text-cyan-400" />
-            Κατανομή Συσκευών
-          </h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Monitor className="h-4 w-4 text-white/50" />
-                <span className="text-white/70">Desktop</span>
-              </div>
-              <div className="flex items-center gap-2 w-1/2">
-                <div className="flex-1 h-2 bg-white/[0.05] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-cyan-500 rounded-full"
-                    style={{ width: `${deviceBreakdown.desktop}%` }}
-                  />
-                </div>
-                <span className="text-sm text-white">{deviceBreakdown.desktop}%</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone className="h-4 w-4 text-white/50" />
-                <span className="text-white/70">Mobile</span>
-              </div>
-              <div className="flex items-center gap-2 w-1/2">
-                <div className="flex-1 h-2 bg-white/[0.05] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-violet-500 rounded-full"
-                    style={{ width: `${deviceBreakdown.mobile}%` }}
-                  />
-                </div>
-                <span className="text-sm text-white">{deviceBreakdown.mobile}%</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-white/50" />
-                <span className="text-white/70">Tablet</span>
-              </div>
-              <div className="flex items-center gap-2 w-1/2">
-                <div className="flex-1 h-2 bg-white/[0.05] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `${deviceBreakdown.tablet}%` }}
-                  />
-                </div>
-                <span className="text-sm text-white">{deviceBreakdown.tablet}%</span>
-              </div>
-            </div>
+      {/* Best Time to Send */}
+      <GlassCard>
+        <h3 className="font-medium text-white mb-4 flex items-center gap-2">
+          <Clock className="h-4 w-4 text-amber-400" />
+          Καλύτερη Ώρα Αποστολής
+        </h3>
+        {bestHour ? (
+          <div className="text-center py-8">
+            <p className="text-5xl font-bold text-white">{bestHour[0]}:00</p>
+            <p className="text-white/50 mt-2">
+              {bestHour[1]} ανοίγματα αυτή την ώρα
+            </p>
+            <GlassBadge className="mt-4" variant="primary">
+              <Clock className="h-3 w-3 mr-1" />
+              Προτεινόμενη ώρα αποστολής
+            </GlassBadge>
           </div>
-        </GlassCard>
-
-        {/* Best Time to Send */}
-        <GlassCard>
-          <h3 className="font-medium text-white mb-4 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-amber-400" />
-            Καλύτερη Ώρα Αποστολής
-          </h3>
-          {bestHour ? (
-            <div className="text-center py-8">
-              <p className="text-5xl font-bold text-white">{bestHour[0]}:00</p>
-              <p className="text-white/50 mt-2">
-                {bestHour[1]} ανοίγματα αυτή την ώρα
-              </p>
-              <GlassBadge className="mt-4" variant="primary">
-                <Clock className="h-3 w-3 mr-1" />
-                Προτεινόμενη ώρα αποστολής
-              </GlassBadge>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-white/40">
-              <Clock className="h-12 w-12 mx-auto mb-2" />
-              <p>Μη επαρκή δεδομένα</p>
-            </div>
-          )}
-        </GlassCard>
-      </div>
+        ) : (
+          <div className="text-center py-8 text-white/40">
+            <Clock className="h-12 w-12 mx-auto mb-2" />
+            <p>Μη επαρκή δεδομένα</p>
+          </div>
+        )}
+      </GlassCard>
 
       {/* Recent Activity */}
       <GlassCard>
