@@ -8,6 +8,7 @@ import { OutlookSidebar } from '@/components/email/outlook-sidebar';
 import { OutlookList } from '@/components/email/outlook-list';
 import { OutlookEditor } from '@/components/email/outlook-editor';
 import { OutlookRecipientDrawer } from '@/components/email/outlook-recipient-drawer';
+import { CampaignRecipientsDrawer } from '@/components/email/campaign-recipients-drawer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/stores/ui-store';
 import {
@@ -97,6 +98,7 @@ export default function EmailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isNew, setIsNew] = useState(false);
   const [showRecipientDrawer, setShowRecipientDrawer] = useState(false);
+  const [showRecipientsViewDrawer, setShowRecipientsViewDrawer] = useState(false);
 
   // Editor state
   const [campaignName, setCampaignName] = useState('');
@@ -111,6 +113,12 @@ export default function EmailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // The currently selected campaign (for passing status to the editor)
+  const selectedCampaign = useMemo(
+    () => campaigns.find((c) => c.id === selectedCampaignId) ?? null,
+    [campaigns, selectedCampaignId]
+  );
 
   // Computed folder counts
   const folderCounts = useMemo(() => ({
@@ -641,6 +649,12 @@ export default function EmailPage() {
             onSchedule={handleSchedule}
             onCancel={handleCancel}
             onOpenRecipients={() => setShowRecipientDrawer(true)}
+            onOpenRecipientsDrawer={
+              selectedCampaignId && ['sent', 'sending', 'failed'].includes(selectedCampaign?.status ?? '')
+                ? () => setShowRecipientsViewDrawer(true)
+                : undefined
+            }
+            campaignStatus={selectedCampaign?.status ?? null}
             saving={saving}
             sending={sending}
             isNew={isNew}
@@ -649,6 +663,16 @@ export default function EmailPage() {
         }
         showEditor={isEditing}
       />
+
+      {/* Recipient View Drawer — shows actual recipients of a sent/sending/failed campaign */}
+      {selectedCampaignId && (
+        <CampaignRecipientsDrawer
+          isOpen={showRecipientsViewDrawer}
+          onClose={() => setShowRecipientsViewDrawer(false)}
+          campaignId={selectedCampaignId}
+          campaignName={campaignName}
+        />
+      )}
 
       {/* Recipient Selection Drawer */}
       <OutlookRecipientDrawer

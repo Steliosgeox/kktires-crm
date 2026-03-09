@@ -86,6 +86,8 @@ interface OutlookEditorProps {
   onSchedule: (runAtIso: string) => void;
   onCancel: () => void;
   onOpenRecipients: () => void;
+  onOpenRecipientsDrawer?: () => void;
+  campaignStatus?: string | null;
   saving: boolean;
   sending: boolean;
   isNew: boolean;
@@ -123,6 +125,8 @@ export function OutlookEditor({
   onSchedule,
   onCancel,
   onOpenRecipients,
+  onOpenRecipientsDrawer,
+  campaignStatus,
   saving,
   sending,
   isNew,
@@ -921,15 +925,24 @@ export function OutlookEditor({
                 </button>
               </div>
               {totalRecipients > 0 && (
-                <span
-                  className="text-xs px-2 py-1 rounded-full"
-                  style={{
-                    background: 'var(--outlook-accent)',
-                    color: 'white',
-                  }}
-                >
-                  {totalRecipients} παραλήπτες
-                </span>
+                onOpenRecipientsDrawer && ['sent', 'sending', 'failed'].includes(campaignStatus ?? '') ? (
+                  <button
+                    type="button"
+                    onClick={onOpenRecipientsDrawer}
+                    className="text-xs px-2 py-1 rounded-full transition-opacity hover:opacity-80"
+                    style={{ background: 'var(--outlook-accent)', color: 'white' }}
+                    title="Δείτε τη λίστα παραληπτών"
+                  >
+                    {totalRecipients} παραλήπτες
+                  </button>
+                ) : (
+                  <span
+                    className="text-xs px-2 py-1 rounded-full"
+                    style={{ background: 'var(--outlook-accent)', color: 'white' }}
+                  >
+                    {totalRecipients} παραλήπτες
+                  </span>
+                )
               )}
             </div>
           </div>
