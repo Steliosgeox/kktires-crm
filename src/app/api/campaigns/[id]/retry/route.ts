@@ -55,6 +55,20 @@ export async function POST(
             });
         }
 
+        // Guard: do not create a second job if one is already active
+        const activeJob = await db.query.emailJobs.findFirst({
+            where: (j, { and: wa, eq: we, inArray: wi }) =>
+                wa(we(j.campaignId, campaignId), wi(j.status, ['queued', 'processing'])),
+        });
+        if (activeJob) {
+            return NextResponse.json({
+                message: 'A job is already active for this campaign',
+                jobId: activeJob.id,
+                failedCount: failedRecipients.length,
+                requestId,
+            });
+        }
+
         const now = new Date();
 
         // Reset failed recipients to pending
@@ -87,20 +101,24 @@ export async function POST(
             updatedAt: now,
         });
 
-        // Create job items for each failed recipient
-        for (const recipient of failedRecipients) {
-            await db.insert(emailJobItems).values({
-                id: `ji_${nanoid()}`,
-                jobId,
-                campaignId,
-                recipientId: recipient.id,
-                status: 'pending',
-                sentAt: null,
-                errorMessage: null,
-                createdAt: now,
-                updatedAt: now,
-            });
-        }
+        // Batch insert job items (100 per chunk to stay within SQLite param limits)
+        const itemRows = failedRecipients.map((recipient) => ({
+            id: `ji_${nanoid()}`,
+            jobId,
+            campaignId,
+            recipientId: recipient.id,
+            status: 'pending' as const,
+            sentAt: null,
+            errorMessage: null,
+            createdAt: now,
+            updatedAt: now,
+        }));
+
+        await db.transaction(async (tx) => {
+            for (let i = 0; i < itemRows.length; i += 100) {
+                await tx.insert(emailJobItems).values(itemRows.slice(i, i + 100));
+            }
+        });
 
         // Set campaign status back to 'sending' so the cron picks it up
         await db
