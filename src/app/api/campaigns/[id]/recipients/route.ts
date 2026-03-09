@@ -67,6 +67,7 @@ export async function GET(
             .select({
                 id: campaignRecipients.id,
                 email: campaignRecipients.email,
+                displayName: campaignRecipients.displayName,
                 status: campaignRecipients.status,
                 errorMessage: campaignRecipients.errorMessage,
                 sentAt: campaignRecipients.sentAt,
@@ -80,12 +81,20 @@ export async function GET(
             .where(and(...conditions))
             .limit(limit);
 
+        const resolvedRecipients = recipients.map((r) => ({
+            ...r,
+            name:
+                r.firstName && r.lastName
+                    ? `${r.firstName} ${r.lastName}`.trim()
+                    : r.firstName || r.displayName || null,
+        }));
+
         return NextResponse.json({
             campaignId,
             campaignName: campaign.name,
             campaignStatus: campaign.status,
             summary,
-            recipients,
+            recipients: resolvedRecipients,
             requestId,
         });
     } catch (error) {
