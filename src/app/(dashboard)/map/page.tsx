@@ -409,9 +409,6 @@ export default function MapPage() {
           >
             Ανανέωση
           </GlassButton>
-          <GlassButton variant="default" leftIcon={<Layers className="h-4 w-4" />} disabled title="Not implemented yet">
-            Επίπεδα
-          </GlassButton>
         </div>
       </div>
 

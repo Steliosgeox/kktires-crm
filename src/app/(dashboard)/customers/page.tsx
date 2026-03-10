@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
@@ -106,7 +106,7 @@ type SelectionState = string[] | typeof ALL_SELECTED;
 const SHELL_CUSTOMERS_REFACTOR_ENABLED =
   process.env.NEXT_PUBLIC_UI_REFACTOR_SHELL_CUSTOMERS === 'true';
 
-export default function CustomersPage() {
+function CustomersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -793,14 +793,6 @@ export default function CustomersPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <GlassButton
-                size="sm"
-                variant="default"
-                leftIcon={<Tag className="h-3 w-3" />}
-                onClick={() => {/* Phase 4c — tag modal, TODO */}}
-              >
-                Προσθήκη Ετικέτας
-              </GlassButton>
               <GlassButton
                 size="sm"
                 variant="default"

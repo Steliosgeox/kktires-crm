@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
@@ -73,6 +73,16 @@ type PreferencesData = {
   theme: 'dark' | 'light';
 };
 
+type ActiveIntegration = {
+  id: string;
+  name: string;
+  icon: React.ElementType;
+  connected: boolean;
+  attention: boolean;
+  email: string | null;
+  onConnect: () => void;
+};
+
 type GmailStatus = {
   connected: boolean;
   hasRefreshToken: boolean;
@@ -97,7 +107,7 @@ async function fetchJson<T>(url: string, fallbackMessage: string): Promise<T> {
   return data as T;
 }
 
-export default function SettingsPage() {
+function SettingsPageInner() {
   const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
   const theme = useUIStore((s) => s.theme);
@@ -284,10 +294,8 @@ export default function SettingsPage() {
     }
   };
 
-  const integrations = useMemo(() => {
-    const mapsConnected = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const integrations = useMemo((): ActiveIntegration[] => {
     const gmailConnected = !!gmailStatus?.connected && !!gmailStatus?.hasRefreshToken;
-
     return [
       {
         id: 'gmail',
@@ -298,9 +306,8 @@ export default function SettingsPage() {
         email: gmailStatus?.email || session?.user?.email || null,
         onConnect: () => signIn('google', { callbackUrl: '/settings' }),
       },
-      { id: 'calendar', name: 'Google Calendar', icon: Calendar, connected: false, disabled: true },
-      { id: 'maps', name: 'Google Maps', icon: MapPin, connected: mapsConnected, disabled: true },
-    ] as const;
+      // Google Calendar and Maps are not yet implemented — omit from rendered list
+    ];
   }, [gmailStatus, session?.user?.email]);
 
   if (sessionStatus === 'loading') {
@@ -372,10 +379,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-6 mb-8">
                 <GlassAvatar name={profile.name || profile.email || 'Χρήστης'} size="xl" />
                 <div>
-                  <GlassButton variant="default" size="sm" disabled title="Not implemented yet">
-                    Αλλαγή Φωτογραφίας
-                  </GlassButton>
-                  <p className="text-xs text-white/40 mt-2">Η αλλαγή φωτογραφίας δεν έχει υλοποιηθεί ακόμα.</p>
+                  <p className="text-xs text-white/40">Η αλλαγή φωτογραφίας δεν έχει υλοποιηθεί ακόμα.</p>
                 </div>
               </div>
 
@@ -487,14 +491,11 @@ export default function SettingsPage() {
                           <div>
                             <h3 className="font-medium text-white">{integration.name}</h3>
                             {integration.connected ? (
-                              <p className="text-sm text-white/50">{(integration as any).email || 'Συνδεδεμένο'}</p>
-                            ) : (integration as any).attention ? (
+                              <p className="text-sm text-white/50">{integration.email || 'Συνδεδεμένο'}</p>
+                            ) : integration.attention ? (
                               <p className="text-sm text-amber-300/80">Χρειάζεται επανασύνδεση (λείπει refresh token)</p>
                             ) : (
                               <p className="text-sm text-white/40">Μη συνδεδεμένο</p>
-                            )}
-                            {(integration as any).disabled && (
-                              <p className="text-xs text-white/40 mt-1">Δεν έχει υλοποιηθεί ακόμα.</p>
                             )}
                           </div>
                         </div>
@@ -507,8 +508,7 @@ export default function SettingsPage() {
                             <GlassButton
                               variant="ghost"
                               size="sm"
-                              disabled={(integration as any).disabled}
-                              onClick={() => (integration as any).onConnect?.()}
+                              onClick={integration.onConnect}
                             >
                               Επανασύνδεση
                             </GlassButton>
@@ -517,10 +517,9 @@ export default function SettingsPage() {
                           <GlassButton
                             variant="primary"
                             size="sm"
-                            disabled={(integration as any).disabled}
-                            onClick={() => (integration as any).onConnect?.()}
+                            onClick={integration.onConnect}
                           >
-                            {(integration as any).attention ? (
+                            {integration.attention ? (
                               <span className="inline-flex items-center gap-2">
                                 <AlertTriangle className="h-4 w-4" />
                                 Επανασύνδεση
@@ -538,12 +537,7 @@ export default function SettingsPage() {
 
               {/* API Keys */}
               <GlassCard>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-medium text-white">API Keys</h3>
-                  <GlassButton variant="default" size="sm" leftIcon={<Key className="h-3 w-3" />} disabled title="Not implemented yet">
-                    Νέο Κλειδί
-                  </GlassButton>
-                </div>
+                <h3 className="font-medium text-white mb-4">API Keys</h3>
                 <p className="text-sm text-white/50">
                   Η διαχείριση API keys δεν έχει υλοποιηθεί ακόμα.
                 </p>
@@ -660,20 +654,14 @@ export default function SettingsPage() {
                 <p className="text-sm text-white/50 mb-4">
                   Κατεβάστε όλα τα δεδομένα σας σε μορφή CSV ή Excel
                 </p>
-                <GlassButton variant="default" disabled title="Not implemented yet">
-                  Εξαγωγή Όλων
-                </GlassButton>
-                <p className="text-xs text-white/40 mt-2">Δεν έχει υλοποιηθεί ακόμα.</p>
+                <p className="text-xs text-white/40">Δεν έχει υλοποιηθεί ακόμα.</p>
               </GlassCard>
               <GlassCard className="border-red-500/20">
                 <h2 className="text-lg font-semibold text-red-400 mb-4">Διαγραφή Λογαριασμού</h2>
                 <p className="text-sm text-white/50 mb-4">
                   Η διαγραφή του λογαριασμού είναι μόνιμη και δεν μπορεί να αναιρεθεί
                 </p>
-                <GlassButton variant="danger" disabled title="Not implemented yet">
-                  Διαγραφή Λογαριασμού
-                </GlassButton>
-                <p className="text-xs text-white/40 mt-2">Δεν έχει υλοποιηθεί ακόμα.</p>
+                <p className="text-xs text-white/40">Δεν έχει υλοποιηθεί ακόμα.</p>
               </GlassCard>
             </div>
           )}

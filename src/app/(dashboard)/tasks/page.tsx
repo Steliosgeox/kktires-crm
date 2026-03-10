@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckSquare,
@@ -141,7 +141,7 @@ function TaskItem({
   );
 }
 
-export default function TasksPage() {
+function TasksPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -380,9 +380,6 @@ export default function TasksPage() {
             leftIcon={<CheckSquare className="h-4 w-4" />}
           />
         </div>
-        <GlassButton variant="default" leftIcon={<Filter className="h-4 w-4" />} disabled title="Not implemented yet">
-          Φίλτρα
-        </GlassButton>
       </div>
 
       {/* Tasks Tabs */}

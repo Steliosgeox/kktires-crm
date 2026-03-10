@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus,
@@ -56,7 +56,7 @@ const sourceLabels: Record<string, string> = {
   manual: 'Χειροκίνητη',
 };
 
-export default function LeadsPage() {
+function LeadsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -311,9 +311,6 @@ export default function LeadsPage() {
             leftIcon={<Search className="h-4 w-4" />}
           />
         </div>
-        <GlassButton variant="default" leftIcon={<Filter className="h-4 w-4" />} disabled title="Not implemented yet">
-          Φίλτρα
-        </GlassButton>
       </div>
 
       {/* Leads Kanban */}
