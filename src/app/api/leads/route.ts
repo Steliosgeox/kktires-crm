@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
         firstName: body.firstName,
         lastName: body.lastName || null,
         company: body.company || null,
-        email: body.email || null,
+        email: body.email ? body.email.toLowerCase() : null,
         phone: body.phone || null,
         source: body.source || 'manual',
         status: body.status || 'new',

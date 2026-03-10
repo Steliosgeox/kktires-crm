@@ -9,6 +9,7 @@ import { OutlookList } from '@/components/email/outlook-list';
 import { OutlookEditor } from '@/components/email/outlook-editor';
 import { OutlookRecipientDrawer } from '@/components/email/outlook-recipient-drawer';
 import { CampaignRecipientsDrawer } from '@/components/email/campaign-recipients-drawer';
+import { RecipientPreviewDrawer } from '@/components/email/recipient-preview-drawer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/stores/ui-store';
 import {
@@ -119,6 +120,8 @@ export default function EmailPage() {
     () => campaigns.find((c) => c.id === selectedCampaignId) ?? null,
     [campaigns, selectedCampaignId]
   );
+  const selectedCampaignStatus = selectedCampaign?.status ?? null;
+  const usesDeliverySnapshot = ['sent', 'sending', 'failed'].includes(selectedCampaign?.status ?? '');
 
   // Computed folder counts
   const folderCounts = useMemo(() => ({
@@ -380,7 +383,7 @@ export default function EmailPage() {
         name: campaignName,
         subject,
         content,
-        status: 'draft',
+        status: isNew ? 'draft' : (selectedCampaignStatus ?? 'draft'),
         recipientFilters,
         signatureId: selectedSignature,
         assets: {
@@ -650,11 +653,11 @@ export default function EmailPage() {
             onCancel={handleCancel}
             onOpenRecipients={() => setShowRecipientDrawer(true)}
             onOpenRecipientsDrawer={
-              selectedCampaignId && ['sent', 'sending', 'failed'].includes(selectedCampaign?.status ?? '')
+              (selectedCampaignId && usesDeliverySnapshot) || hasRecipientSelection(recipientFilters)
                 ? () => setShowRecipientsViewDrawer(true)
                 : undefined
             }
-            campaignStatus={selectedCampaign?.status ?? null}
+            campaignStatus={selectedCampaignStatus}
             saving={saving}
             sending={sending}
             isNew={isNew}
@@ -664,13 +667,21 @@ export default function EmailPage() {
         showEditor={isEditing}
       />
 
-      {/* Recipient View Drawer — shows actual recipients of a sent/sending/failed campaign */}
-      {selectedCampaignId && (
+      {/* Recipient View Drawer — sent campaigns use stored recipients, drafts use live preview */}
+      {selectedCampaignId && usesDeliverySnapshot && (
         <CampaignRecipientsDrawer
           isOpen={showRecipientsViewDrawer}
           onClose={() => setShowRecipientsViewDrawer(false)}
           campaignId={selectedCampaignId}
           campaignName={campaignName}
+        />
+      )}
+      {showRecipientsViewDrawer && !usesDeliverySnapshot && (
+        <RecipientPreviewDrawer
+          isOpen={showRecipientsViewDrawer}
+          onClose={() => setShowRecipientsViewDrawer(false)}
+          campaignName={campaignName}
+          filters={recipientFilters}
         />
       )}
 
@@ -680,6 +691,7 @@ export default function EmailPage() {
         onClose={() => setShowRecipientDrawer(false)}
         filters={recipientFilters}
         onFiltersChange={setRecipientFilters}
+        onPreviewRecipients={() => setShowRecipientsViewDrawer(true)}
       />
 
       {/* Error Toast */}

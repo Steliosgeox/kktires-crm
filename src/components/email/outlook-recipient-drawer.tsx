@@ -56,6 +56,7 @@ interface OutlookRecipientDrawerProps {
   onClose: () => void;
   filters: RecipientFilters;
   onFiltersChange: (filters: RecipientFilters) => void;
+  onPreviewRecipients?: () => void;
 }
 
 type TabType = 'cities' | 'tags' | 'segments' | 'customers' | 'manualEmails';
@@ -81,6 +82,7 @@ export function OutlookRecipientDrawer({
   onClose,
   filters,
   onFiltersChange,
+  onPreviewRecipients,
 }: OutlookRecipientDrawerProps) {
   const [activeTab, setActiveTab] = useState<TabType>('cities');
   const [search, setSearch] = useState('');
@@ -160,6 +162,20 @@ export function OutlookRecipientDrawer({
     }
   );
 
+  const selectedCustomersKey = useMemo(() => {
+    if (!isOpen || normalizedFilters.customerIds.length === 0) return null;
+    return `/api/customers?ids=${normalizedFilters.customerIds.join(',')}`;
+  }, [isOpen, normalizedFilters.customerIds]);
+
+  const { data: selectedCustomersData } = useSWR<{ customers?: CustomerData[] }>(
+    selectedCustomersKey,
+    fetchJson,
+    {
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+    }
+  );
+
   const recipientCountKey = useMemo(() => {
     if (!isOpen || !hasRecipientSelection(normalizedFilters)) return null;
     const params = new URLSearchParams();
@@ -188,6 +204,25 @@ export function OutlookRecipientDrawer({
   const segments = optionsData?.segments || [];
   const customers = customersData?.customers || [];
   const recipientCount = typeof recipientCountData?.count === 'number' ? recipientCountData.count : null;
+  const selectedCustomers = useMemo(() => {
+    const byId = new Map((selectedCustomersData?.customers || []).map((customer) => [customer.id, customer]));
+    return normalizedFilters.customerIds
+      .map((customerId) => byId.get(customerId))
+      .filter((customer): customer is CustomerData => Boolean(customer));
+  }, [normalizedFilters.customerIds, selectedCustomersData?.customers]);
+  const selectedCustomersWithEmail = selectedCustomers.filter((customer) => customer.email?.trim());
+  const uniqueSelectedCustomerEmails = new Set(
+    selectedCustomersWithEmail.map((customer) => customer.email!.trim().toLowerCase())
+  );
+  const duplicateSelectedCustomerEmails = Math.max(
+    0,
+    selectedCustomersWithEmail.length - uniqueSelectedCustomerEmails.size
+  );
+  const manualEmailsMergedIntoSelectedCustomers = normalizedFilters.rawEmails.filter((email) =>
+    uniqueSelectedCustomerEmails.has(email.trim().toLowerCase())
+  ).length;
+  const selectedCustomerPreview = selectedCustomers.slice(0, 6);
+  const hiddenSelectedCustomers = Math.max(0, selectedCustomers.length - selectedCustomerPreview.length);
 
   const updateFilters = (next: RecipientFilters) => onFiltersChange(normalizeRecipientFiltersClient(next));
 
@@ -554,31 +589,79 @@ export function OutlookRecipientDrawer({
                 <Loader2 className="w-5 h-5 animate-spin" />
               </div>
             ) : (
-              customers.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() => toggle('customerIds', entry.id)}
-                  className="w-full text-left px-2 py-2 rounded-md text-sm"
-                  style={{
-                    background: normalizedFilters.customerIds.includes(entry.id)
-                      ? 'var(--outlook-accent-light)'
-                      : 'transparent',
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Check
-                      className={`w-3.5 h-3.5 ${
-                        normalizedFilters.customerIds.includes(entry.id) ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    />
-                    {`${entry.firstName || ''} ${entry.lastName || ''}`.trim() || entry.company || 'Χωρίς όνομα'}
+              <>
+                {customers.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => toggle('customerIds', entry.id)}
+                    className="w-full text-left px-2 py-2 rounded-md text-sm"
+                    style={{
+                      background: normalizedFilters.customerIds.includes(entry.id)
+                        ? 'var(--outlook-accent-light)'
+                        : 'transparent',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Check
+                        className={`w-3.5 h-3.5 ${
+                          normalizedFilters.customerIds.includes(entry.id) ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                      {`${entry.firstName || ''} ${entry.lastName || ''}`.trim() || entry.company || 'Χωρίς όνομα'}
+                    </div>
+                    <div className="text-xs pl-6" style={{ color: 'var(--outlook-text-tertiary)' }}>
+                      {entry.email || '—'}
+                    </div>
+                  </button>
+                ))}
+
+                {normalizedFilters.customerIds.length > 0 && (
+                  <div
+                    className="mt-3 rounded-lg border p-3 space-y-2"
+                    style={{
+                      borderColor: 'var(--outlook-border)',
+                      background: 'var(--outlook-bg-surface)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold" style={{ color: 'var(--outlook-text-primary)' }}>
+                        Επιλεγμένοι πελάτες
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--outlook-accent)' }}>
+                        {normalizedFilters.customerIds.length}
+                      </div>
+                    </div>
+
+                    {selectedCustomerPreview.map((customer) => (
+                      <div key={customer.id} className="text-xs">
+                        <div style={{ color: 'var(--outlook-text-primary)' }}>
+                          {`${customer.firstName || ''} ${customer.lastName || ''}`.trim() || customer.company || 'Χωρίς όνομα'}
+                        </div>
+                        <div style={{ color: 'var(--outlook-text-tertiary)' }}>{customer.email || 'Χωρίς email'}</div>
+                      </div>
+                    ))}
+
+                    {hiddenSelectedCustomers > 0 && (
+                      <div className="text-xs" style={{ color: 'var(--outlook-text-tertiary)' }}>
+                        +{hiddenSelectedCustomers} ακόμη πελάτες
+                      </div>
+                    )}
+
+                    {(duplicateSelectedCustomerEmails > 0 || manualEmailsMergedIntoSelectedCustomers > 0) && (
+                      <div className="text-xs" style={{ color: 'var(--outlook-text-tertiary)' }}>
+                        {duplicateSelectedCustomerEmails > 0
+                          ? `${duplicateSelectedCustomerEmails} διπλότυπα email συγχωνεύονται στον τελικό αριθμό.`
+                          : null}
+                        {duplicateSelectedCustomerEmails > 0 && manualEmailsMergedIntoSelectedCustomers > 0 ? ' ' : ''}
+                        {manualEmailsMergedIntoSelectedCustomers > 0
+                          ? `${manualEmailsMergedIntoSelectedCustomers} χειροκίνητα email υπάρχουν ήδη σε επιλεγμένους πελάτες.`
+                          : null}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-xs pl-6" style={{ color: 'var(--outlook-text-tertiary)' }}>
-                    {entry.email || '—'}
-                  </div>
-                </button>
-              ))
+                )}
+              </>
             )
           )}
 
@@ -642,13 +725,40 @@ export function OutlookRecipientDrawer({
         </div>
 
         <div className="p-4 border-t" style={{ borderColor: 'var(--outlook-border)' }}>
+          {(normalizedFilters.customerIds.length > 0 || normalizedFilters.rawEmails.length > 0) && (
+            <div className="mb-3 space-y-1 text-xs" style={{ color: 'var(--outlook-text-tertiary)' }}>
+              {normalizedFilters.customerIds.length > 0 && (
+                <div>Επιλεγμένοι πελάτες: {normalizedFilters.customerIds.length}</div>
+              )}
+              {normalizedFilters.rawEmails.length > 0 && (
+                <div>Χειροκίνητα email: {normalizedFilters.rawEmails.length}</div>
+              )}
+              {duplicateSelectedCustomerEmails > 0 && (
+                <div>Διπλότυπα email πελατών: {duplicateSelectedCustomerEmails}</div>
+              )}
+              {manualEmailsMergedIntoSelectedCustomers > 0 && (
+                <div>Χειροκίνητα email που υπάρχουν ήδη σε πελάτες: {manualEmailsMergedIntoSelectedCustomers}</div>
+              )}
+            </div>
+          )}
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm" style={{ color: 'var(--outlook-text-secondary)' }}>
-              {messagesEl.email.recipientsSelected}:
+              Μοναδικά email για αποστολή:
             </span>
-            <span className="text-lg font-semibold" style={{ color: 'var(--outlook-accent)' }}>
-              {recipientCountLoading && recipientCountKey ? '...' : recipientCount ?? '—'}
-            </span>
+            {onPreviewRecipients && (recipientCount ?? 0) > 0 ? (
+              <button
+                type="button"
+                onClick={onPreviewRecipients}
+                className="text-lg font-semibold transition-opacity hover:opacity-80"
+                style={{ color: 'var(--outlook-accent)' }}
+              >
+                {recipientCountLoading && recipientCountKey ? '...' : recipientCount ?? '—'}
+              </button>
+            ) : (
+              <span className="text-lg font-semibold" style={{ color: 'var(--outlook-accent)' }}>
+                {recipientCountLoading && recipientCountKey ? '...' : recipientCount ?? '—'}
+              </span>
+            )}
           </div>
           <button
             type="button"

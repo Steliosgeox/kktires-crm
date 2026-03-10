@@ -87,7 +87,7 @@ export async function PUT(
         ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
         ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
         ...(body.company !== undefined ? { company: body.company } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.email !== undefined ? { email: body.email ? body.email.toLowerCase() : null } : {}),
         ...(body.phone !== undefined ? { phone: body.phone } : {}),
         ...(body.mobile !== undefined ? { mobile: body.mobile } : {}),
         ...(body.street !== undefined ? { street: body.street } : {}),

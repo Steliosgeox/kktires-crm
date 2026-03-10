@@ -28,7 +28,8 @@ export async function GET(
         const { id: campaignId } = await params;
         const url = new URL(request.url);
         const statusFilter = url.searchParams.get('status');
-        const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get('limit') || '100', 10)));
+        const requestedLimit = parseInt(url.searchParams.get('limit') || '1000', 10);
+        const limit = Math.min(10000, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 1000));
 
         // Verify campaign belongs to org
         const campaign = await db.query.emailCampaigns.findFirst({

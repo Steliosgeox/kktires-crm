@@ -1,5 +1,14 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
+
+const createdAtColumn = (name = 'created_at') =>
+  integer(name, { mode: 'timestamp' }).notNull().$defaultFn(() => new Date());
+
+const updatedAtColumn = (name = 'updated_at') =>
+  integer(name, { mode: 'timestamp' })
+    .notNull()
+    .$defaultFn(() => new Date())
+    .$onUpdateFn(() => new Date());
 
 // ============================================
 // MULTI-TENANT: ORGANIZATIONS
@@ -25,8 +34,8 @@ export const organizations = sqliteTable('organizations', {
     };
   }>(),
   subscriptionTier: text('subscription_tier').default('free'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 });
 
 export const organizationMembers = sqliteTable('organization_members', {
@@ -47,7 +56,7 @@ export const organizationInvitations = sqliteTable('organization_invitations', {
   role: text('role').notNull().default('member'),
   token: text('token').notNull().unique(),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 });
 
 // ============================================
@@ -167,12 +176,16 @@ export const customers = sqliteTable('customers', {
   isActive: integer('is_active', { mode: 'boolean' }).default(true),
   unsubscribed: integer('unsubscribed', { mode: 'boolean' }).default(false),
 
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-  createdBy: text('created_by').references(() => users.id),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => ({
   orgIdx: index('customers_org_idx').on(table.orgId),
   emailIdx: index('customers_email_idx').on(table.email),
+  orgEmailUidx: uniqueIndex('customers_org_email_uidx').on(
+    table.orgId,
+    sql`lower(trim(${table.email}))`
+  ),
   cityIdx: index('customers_city_idx').on(table.city),
   categoryIdx: index('customers_category_idx').on(table.category),
   afmIdx: index('customers_afm_idx').on(table.afm),
@@ -188,9 +201,9 @@ export const customerNotes = sqliteTable('customer_notes', {
   customerId: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   isPinned: integer('is_pinned', { mode: 'boolean' }).default(false),
-  createdBy: text('created_by').notNull().references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   customerIdx: index('notes_customer_idx').on(table.customerId),
 }));
@@ -207,8 +220,8 @@ export const customerActivities = sqliteTable('customer_activities', {
   title: text('title').notNull(),
   description: text('description'),
   metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
 }, (table) => ({
   customerIdx: index('activities_customer_idx').on(table.customerId),
   typeIdx: index('activities_type_idx').on(table.type),
@@ -224,18 +237,18 @@ export const tags = sqliteTable('tags', {
   name: text('name').notNull(),
   color: text('color').notNull().default('#3B82F6'),
   description: text('description'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 }, (table) => ({
-  orgNameIdx: index('tags_org_name_idx').on(table.orgId, table.name),
+  orgNameUidx: uniqueIndex('tags_org_name_uidx').on(table.orgId, sql`lower(trim(${table.name}))`),
 }));
 
 export const customerTags = sqliteTable('customer_tags', {
   id: text('id').primaryKey(),
   customerId: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
   tagId: text('tag_id').notNull().references(() => tags.id, { onDelete: 'cascade' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 }, (table) => ({
-  customerTagIdx: index('customer_tag_idx').on(table.customerId, table.tagId),
+  customerTagUidx: uniqueIndex('customer_tag_uidx').on(table.customerId, table.tagId),
 }));
 
 // ============================================
@@ -251,18 +264,26 @@ export const customFields = sqliteTable('custom_fields', {
   options: text('options', { mode: 'json' }).$type<string[]>(),
   required: integer('required', { mode: 'boolean' }).default(false),
   sortOrder: integer('sort_order').default(0),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-});
+  createdAt: createdAtColumn(),
+}, (table) => ({
+  orgNameUidx: uniqueIndex('custom_fields_org_name_uidx').on(
+    table.orgId,
+    sql`lower(trim(${table.name}))`
+  ),
+}));
 
 export const customerCustomValues = sqliteTable('customer_custom_values', {
   id: text('id').primaryKey(),
   customerId: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
   fieldId: text('field_id').notNull().references(() => customFields.id, { onDelete: 'cascade' }),
   value: text('value'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
-  customerFieldIdx: index('custom_values_idx').on(table.customerId, table.fieldId),
+  customerFieldUidx: uniqueIndex('custom_values_customer_field_uidx').on(
+    table.customerId,
+    table.fieldId
+  ),
 }));
 
 // ============================================
@@ -286,17 +307,23 @@ export const leads = sqliteTable('leads', {
   score: integer('score').default(0),
 
   // Assignment
-  assignedTo: text('assigned_to').references(() => users.id),
+  assignedTo: text('assigned_to').references(() => users.id, { onDelete: 'set null' }),
 
   // Conversion
-  convertedToCustomerId: text('converted_to_customer_id').references(() => customers.id),
+  convertedToCustomerId: text('converted_to_customer_id').references(() => customers.id, {
+    onDelete: 'set null',
+  }),
   convertedAt: integer('converted_at', { mode: 'timestamp' }),
 
   notes: text('notes'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   orgIdx: index('leads_org_idx').on(table.orgId),
+  orgEmailUidx: uniqueIndex('leads_org_email_uidx').on(
+    table.orgId,
+    sql`lower(trim(${table.email}))`
+  ),
   statusIdx: index('leads_status_idx').on(table.status),
 }));
 
@@ -312,9 +339,14 @@ export const gmailCredentials = sqliteTable('gmail_credentials', {
   refreshToken: text('refresh_token').notNull(),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
   isDefault: integer('is_default', { mode: 'boolean' }).default(false),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-});
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
+}, (table) => ({
+  orgEmailUidx: uniqueIndex('gmail_credentials_org_email_uidx').on(
+    table.orgId,
+    sql`lower(trim(${table.email}))`
+  ),
+}));
 
 // ============================================
 // EMAIL MARKETING: TEMPLATES
@@ -329,10 +361,11 @@ export const emailTemplates = sqliteTable('email_templates', {
   category: text('category'), // welcome, offers, updates, birthday, etc.
   isDefault: integer('is_default', { mode: 'boolean' }).default(false),
   thumbnail: text('thumbnail'),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
+  orgNameUidx: uniqueIndex('templates_org_name_uidx').on(table.orgId, sql`lower(trim(${table.name}))`),
   orgCategoryIdx: index('templates_org_category_idx').on(table.orgId, table.category),
 }));
 
@@ -346,13 +379,15 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   name: text('name').notNull(),
   subject: text('subject').notNull(),
   content: text('content').notNull(),
-  templateId: text('template_id').references(() => emailTemplates.id),
-  signatureId: text('signature_id').references(() => emailSignatures.id),
+  templateId: text('template_id').references(() => emailTemplates.id, { onDelete: 'set null' }),
+  signatureId: text('signature_id').references(() => emailSignatures.id, { onDelete: 'set null' }),
   status: text('status').notNull().default('draft'), // draft, scheduled, sending, sent, paused, cancelled
 
   // Sending
   fromEmail: text('from_email'),
-  gmailCredentialId: text('gmail_credential_id').references(() => gmailCredentials.id),
+  gmailCredentialId: text('gmail_credential_id').references(() => gmailCredentials.id, {
+    onDelete: 'set null',
+  }),
   recipientFilters: text('recipient_filters', { mode: 'json' }).$type<{
     cities: string[];
     tags: string[];
@@ -372,9 +407,9 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
   bounceCount: integer('bounce_count').default(0),
   unsubscribeCount: integer('unsubscribe_count').default(0),
 
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   orgStatusIdx: index('campaigns_org_status_idx').on(table.orgId, table.status),
 }));
@@ -382,7 +417,7 @@ export const emailCampaigns = sqliteTable('email_campaigns', {
 export const emailAssets = sqliteTable('email_assets', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
-  uploaderUserId: text('uploader_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  uploaderUserId: text('uploader_user_id').references(() => users.id, { onDelete: 'set null' }),
   blobUrl: text('blob_url').notNull(),
   blobPath: text('blob_path').notNull(),
   fileName: text('file_name').notNull(),
@@ -392,8 +427,8 @@ export const emailAssets = sqliteTable('email_assets', {
   width: integer('width'),
   height: integer('height'),
   sha256: text('sha256').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
   deletedAt: integer('deleted_at', { mode: 'timestamp' }),
 }, (table) => ({
   orgCreatedIdx: index('email_assets_org_created_idx').on(table.orgId, table.createdAt),
@@ -411,8 +446,8 @@ export const campaignAssets = sqliteTable('campaign_assets', {
   align: text('align'), // left | center | right
   altText: text('alt_text'),
   sortOrder: integer('sort_order').notNull().default(0),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   campaignRoleIdx: index('campaign_assets_campaign_role_idx').on(table.campaignId, table.role),
   assetIdx: index('campaign_assets_asset_idx').on(table.assetId),
@@ -459,7 +494,7 @@ export const emailJobs = sqliteTable('email_jobs', {
   id: text('id').primaryKey(),
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   campaignId: text('campaign_id').notNull().references(() => emailCampaigns.id, { onDelete: 'cascade' }),
-  senderUserId: text('sender_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  senderUserId: text('sender_user_id').references(() => users.id, { onDelete: 'set null' }),
 
   status: text('status').notNull().default('queued'), // queued, processing, completed, failed, cancelled
   runAt: integer('run_at', { mode: 'timestamp' }).notNull(),
@@ -473,8 +508,8 @@ export const emailJobs = sqliteTable('email_jobs', {
   completedAt: integer('completed_at', { mode: 'timestamp' }),
   lastError: text('last_error'),
 
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   statusRunIdx: index('email_jobs_status_run_idx').on(table.status, table.runAt),
   campaignIdx: index('email_jobs_campaign_idx').on(table.campaignId),
@@ -490,8 +525,8 @@ export const emailJobItems = sqliteTable('email_job_items', {
   sentAt: integer('sent_at', { mode: 'timestamp' }),
   errorMessage: text('error_message'),
 
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   jobIdx: index('email_job_items_job_idx').on(table.jobId),
   campaignIdx: index('email_job_items_campaign_idx').on(table.campaignId),
@@ -509,7 +544,7 @@ export const emailTracking = sqliteTable('email_tracking', {
   linkUrl: text('link_url'),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 }, (table) => ({
   campaignTypeIdx: index('tracking_campaign_type_idx').on(table.campaignId, table.type),
 }));
@@ -549,7 +584,7 @@ export const emailDeliveryEvents = sqliteTable('email_delivery_events', {
 
   // Timestamps
   occurredAt: integer('occurred_at', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 }, (table) => ({
   campaignIdx: index('idx_delivery_events_campaign').on(table.campaignId),
   recipientIdx: index('idx_delivery_events_recipient').on(table.recipientId),
@@ -584,7 +619,10 @@ export const emailSuppressions = sqliteTable('email_suppressions', {
   suppressedAt: integer('suppressed_at', { mode: 'timestamp' }).notNull(),
   expiresAt: integer('expires_at', { mode: 'timestamp' }),
 }, (table) => ({
-  orgEmailIdx: uniqueIndex('idx_suppressions_org_email').on(table.orgId, table.email),
+  orgEmailUidx: uniqueIndex('idx_suppressions_org_email').on(
+    table.orgId,
+    sql`lower(trim(${table.email}))`
+  ),
   typeIdx: index('idx_suppressions_type').on(table.suppressionType),
   expiresIdx: index('idx_suppressions_expires').on(table.expiresAt),
 }));
@@ -634,8 +672,8 @@ export const emailRetryConfig = sqliteTable('email_retry_config', {
   backoffMultiplier: real('backoff_multiplier').notNull().default(2.0),
   maxDelaySeconds: integer('max_delay_seconds').notNull().default(86400),
 
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 });
 
 // ============================================
@@ -648,10 +686,15 @@ export const emailSignatures = sqliteTable('email_signatures', {
   name: text('name').notNull(),
   content: text('content').notNull(), // HTML
   isDefault: integer('is_default', { mode: 'boolean' }).default(false),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-});
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
+}, (table) => ({
+  orgNameUidx: uniqueIndex('signatures_org_name_uidx').on(
+    table.orgId,
+    sql`lower(trim(${table.name}))`
+  ),
+}));
 
 // ============================================
 // EMAIL MARKETING: AUTOMATIONS
@@ -665,9 +708,9 @@ export const emailAutomations = sqliteTable('email_automations', {
   trigger: text('trigger').notNull(), // customer_created, tag_added, birthday, inactivity
   triggerConfig: text('trigger_config', { mode: 'json' }).$type<Record<string, unknown>>(),
   isActive: integer('is_active', { mode: 'boolean' }).default(false),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 });
 
 export const automationSteps = sqliteTable('automation_steps', {
@@ -676,7 +719,7 @@ export const automationSteps = sqliteTable('automation_steps', {
   type: text('type').notNull(), // send_email, wait, condition, add_tag, remove_tag
   config: text('config', { mode: 'json' }).$type<Record<string, unknown>>(),
   sortOrder: integer('sort_order').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 });
 
 // ============================================
@@ -688,10 +731,13 @@ export const unsubscribes = sqliteTable('unsubscribes', {
   orgId: text('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   email: text('email').notNull(),
   reason: text('reason'),
-  campaignId: text('campaign_id').references(() => emailCampaigns.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  campaignId: text('campaign_id').references(() => emailCampaigns.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
 }, (table) => ({
-  orgEmailIdx: index('unsubscribes_org_email_idx').on(table.orgId, table.email),
+  orgEmailUidx: uniqueIndex('unsubscribes_org_email_uidx').on(
+    table.orgId,
+    sql`lower(trim(${table.email}))`
+  ),
 }));
 
 // ============================================
@@ -707,8 +753,8 @@ export const savedLocations = sqliteTable('saved_locations', {
   longitude: real('longitude').notNull(),
   category: text('category'), // office, warehouse, competitor, other
   notes: text('notes'),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
 });
 
 // ============================================
@@ -724,10 +770,10 @@ export const territories = sqliteTable('territories', {
     type: 'Polygon' | 'Circle';
     coordinates: number[][] | { center: number[]; radius: number };
   }>(),
-  assignedTo: text('assigned_to').references(() => users.id),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  assignedTo: text('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 });
 
 // ============================================
@@ -740,7 +786,7 @@ export const geocodeCache = sqliteTable('geocode_cache', {
   latitude: real('latitude').notNull(),
   longitude: real('longitude').notNull(),
   formattedAddress: text('formatted_address'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 });
 
 // ============================================
@@ -753,14 +799,14 @@ export const tasks = sqliteTable('tasks', {
   title: text('title').notNull(),
   description: text('description'),
   customerId: text('customer_id').references(() => customers.id, { onDelete: 'set null' }),
-  assignedTo: text('assigned_to').references(() => users.id),
+  assignedTo: text('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   status: text('status').notNull().default('todo'), // todo, in_progress, done
   priority: text('priority').notNull().default('medium'), // low, medium, high
   dueDate: integer('due_date', { mode: 'timestamp' }),
   completedAt: integer('completed_at', { mode: 'timestamp' }),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   orgStatusIdx: index('tasks_org_status_idx').on(table.orgId, table.status),
   assignedIdx: index('tasks_assigned_idx').on(table.assignedTo),
@@ -778,8 +824,8 @@ export const googleCalendarTokens = sqliteTable('google_calendar_tokens', {
   refreshToken: text('refresh_token').notNull(),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
   calendarId: text('calendar_id'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 });
 
 // ============================================
@@ -803,7 +849,7 @@ export const notifications = sqliteTable('notifications', {
   message: text('message'),
   link: text('link'),
   isRead: integer('is_read', { mode: 'boolean' }).default(false),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 }, (table) => ({
   userReadIdx: index('notifications_user_read_idx').on(table.userId, table.isRead),
 }));
@@ -820,8 +866,8 @@ export const userPreferences = sqliteTable('user_preferences', {
     campaigns: boolean;
   }>().notNull(),
   theme: text('theme').notNull().default('dark'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
 }, (table) => ({
   userOrgIdx: uniqueIndex('user_preferences_user_org_uidx').on(table.userId, table.orgId),
 }));
@@ -837,8 +883,8 @@ export const customerImages = sqliteTable('customer_images', {
   filename: text('filename').notNull(),
   mimeType: text('mime_type').notNull(),
   size: integer('size').notNull(),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
 });
 
 // ============================================
@@ -859,16 +905,18 @@ export const segments = sqliteTable('segments', {
     logic: 'and' | 'or';
   }>(),
   customerCount: integer('customer_count').default(0),
-  createdBy: text('created_by').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
-});
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
+}, (table) => ({
+  orgNameUidx: uniqueIndex('segments_org_name_uidx').on(table.orgId, sql`lower(trim(${table.name}))`),
+}));
 
 export const segmentCustomers = sqliteTable('segment_customers', {
   id: text('id').primaryKey(),
   segmentId: text('segment_id').notNull().references(() => segments.id, { onDelete: 'cascade' }),
   customerId: text('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  createdAt: createdAtColumn(),
 }, (table) => ({
   segmentCustomerUidx: uniqueIndex('segment_customers_segment_customer_uidx').on(
     table.segmentId,

@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | 'UNAUTHORIZED'
   | 'FORBIDDEN'
   | 'NOT_FOUND'
+  | 'CONFLICT'
   | 'PAYLOAD_TOO_LARGE'
   | 'INTERNAL_ERROR';
 
@@ -112,6 +113,21 @@ export function handleApiError(
 
   if (error instanceof z.ZodError) {
     return jsonError('Invalid input', 400, 'BAD_REQUEST', requestId);
+  }
+
+  const rawMessage =
+    error instanceof Error
+      ? [error.message, error.cause instanceof Error ? error.cause.message : '']
+          .filter(Boolean)
+          .join(' | ')
+      : String(error ?? '');
+
+  if (/UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE|duplicate key/i.test(rawMessage)) {
+    return jsonError('A record with the same unique value already exists', 409, 'CONFLICT', requestId);
+  }
+
+  if (/FOREIGN KEY constraint failed|SQLITE_CONSTRAINT_FOREIGNKEY/i.test(rawMessage)) {
+    return jsonError('This record is still referenced by other data', 409, 'CONFLICT', requestId);
   }
 
   console.error(`[${scope}] requestId=${requestId}`, error);

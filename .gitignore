@@ -36,6 +36,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+.env.production.crm
 
 # vercel
 .vercel
@@ -63,3 +64,5 @@ node_modules_trash*
 node_modules_trash_*
 
 .vercel
+firebase-debug.log
+schema_lines.tmp

@@ -152,6 +152,12 @@ export function OutlookEditor({
 
   const totalRecipients = recipientCount ?? 0;
   const hasRecipients = totalRecipients > 0;
+  const isSentCampaign = campaignStatus === 'sent';
+  const isSendingCampaign = campaignStatus === 'sending';
+  const actionsLocked = isSentCampaign || isSendingCampaign;
+  const saveDisabled = saving || sending || actionsLocked;
+  const sendDisabled = saving || sending || !hasRecipients || actionsLocked;
+  const scheduleDisabled = saving || sending || !hasRecipients || actionsLocked;
 
   // Keep the contentEditable in sync when switching campaigns (without clobbering user typing).
   useEffect(() => {
@@ -643,11 +649,12 @@ export function OutlookEditor({
           </button>
           <button
             onClick={() => onSave(false)}
-            disabled={saving || sending}
+            disabled={saveDisabled}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all"
             style={{
               background: 'var(--outlook-bg-hover)',
               color: 'var(--outlook-text-primary)',
+              opacity: saveDisabled ? 0.6 : 1,
             }}
           >
             <Save className="w-4 h-4" />
@@ -655,10 +662,12 @@ export function OutlookEditor({
           </button>
           <button
             onClick={() => setShowSchedule(!showSchedule)}
+            disabled={scheduleDisabled}
             className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-all"
             style={{
               background: 'var(--outlook-accent-light)',
               color: 'var(--outlook-accent)',
+              opacity: scheduleDisabled ? 0.6 : 1,
             }}
           >
             <Clock className="w-4 h-4" />
@@ -666,12 +675,12 @@ export function OutlookEditor({
           </button>
           <button
             onClick={() => onSave(true)}
-            disabled={saving || sending || !hasRecipients}
+            disabled={sendDisabled}
             className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium rounded-md transition-all"
             style={{
               background: hasRecipients ? 'var(--outlook-accent)' : 'var(--outlook-text-tertiary)',
               color: 'white',
-              opacity: (saving || sending || !hasRecipients) ? 0.6 : 1,
+              opacity: sendDisabled ? 0.6 : 1,
             }}
           >
             <Send className="w-4 h-4" />
@@ -679,6 +688,21 @@ export function OutlookEditor({
           </button>
         </div>
       </div>
+
+      {actionsLocked && (
+        <div
+          className="px-4 py-3 border-b text-sm"
+          style={{
+            background: 'var(--outlook-bg-hover)',
+            borderColor: 'var(--outlook-border)',
+            color: 'var(--outlook-text-secondary)',
+          }}
+        >
+          {isSentCampaign
+            ? 'Η καμπάνια έχει ήδη αποσταλεί. Μπορείτε να δείτε περιεχόμενο και παραλήπτες, αλλά για νέα αποστολή χρησιμοποιήστε Αντιγραφή.'
+            : 'Η καμπάνια αποστέλλεται ήδη. Οι αλλαγές κλειδώνονται προσωρινά μέχρι να ολοκληρωθεί η αποστολή.'}
+        </div>
+      )}
 
       {/* Schedule Dropdown */}
       {showSchedule && (
@@ -744,12 +768,12 @@ export function OutlookEditor({
                 onSchedule(dt.toISOString());
                 setShowSchedule(false);
               }}
-              disabled={saving || sending || !hasRecipients}
+              disabled={scheduleDisabled}
               className="px-4 py-2 text-sm rounded-md"
               style={{
                 background: 'var(--outlook-accent)',
                 color: 'white',
-                opacity: (saving || sending || !hasRecipients) ? 0.6 : 1,
+                opacity: scheduleDisabled ? 0.6 : 1,
               }}
             >
               Επιβεβαίωση Προγραμματισμού
@@ -925,13 +949,17 @@ export function OutlookEditor({
                 </button>
               </div>
               {totalRecipients > 0 && (
-                onOpenRecipientsDrawer && ['sent', 'sending', 'failed'].includes(campaignStatus ?? '') ? (
+                onOpenRecipientsDrawer ? (
                   <button
                     type="button"
                     onClick={onOpenRecipientsDrawer}
                     className="text-xs px-2 py-1 rounded-full transition-opacity hover:opacity-80"
                     style={{ background: 'var(--outlook-accent)', color: 'white' }}
-                    title="Δείτε τη λίστα παραληπτών"
+                    title={
+                      ['sent', 'sending', 'failed'].includes(campaignStatus ?? '')
+                        ? 'Δείτε τη λίστα παραληπτών'
+                        : 'Δείτε την προεπισκόπηση παραληπτών'
+                    }
                   >
                     {totalRecipients} παραλήπτες
                   </button>

@@ -46,13 +46,30 @@ export async function GET(request: NextRequest) {
     const category = (searchParams.get('category') || '').trim();
     const city = (searchParams.get('city') || '').trim().slice(0, 120);
     const vip = (searchParams.get('vip') || '').trim();
-    const { page, limit, offset } = parsePagination(searchParams, {
-      defaultPage: 1,
-      defaultLimit: 50,
-      maxLimit: 100,
-    });
+    const ids = Array.from(
+      new Set(
+        (searchParams.get('ids') || '')
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .slice(0, 500)
+      )
+    );
+    const lookupByIds = ids.length > 0;
+    const pagination = lookupByIds
+      ? { page: 1, limit: ids.length, offset: 0 }
+      : parsePagination(searchParams, {
+          defaultPage: 1,
+          defaultLimit: 50,
+          maxLimit: 100,
+        });
+    const { page, limit, offset } = pagination;
 
     const whereParts: SQL[] = [eq(customers.orgId, orgId)];
+
+    if (lookupByIds) {
+      whereParts.push(inArray(customers.id, ids));
+    }
 
     if (search) {
       const s = `%${search}%`;
@@ -83,7 +100,7 @@ export async function GET(request: NextRequest) {
       whereParts.push(eq(customers.isVip, false));
     }
 
-    const query = db
+    const baseQuery = db
       .select({
         id: customers.id,
         firstName: customers.firstName,
@@ -102,18 +119,20 @@ export async function GET(request: NextRequest) {
       })
       .from(customers)
       .where(and(...whereParts))
-      .orderBy(desc(customers.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .orderBy(desc(customers.createdAt));
 
-    const allCustomers = await query;
+    const allCustomers = lookupByIds
+      ? await baseQuery
+      : await baseQuery.limit(limit).offset(offset);
 
-    const countResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(customers)
-      .where(and(...whereParts));
-
-    const total = countResult[0]?.count || 0;
+    const total = lookupByIds
+      ? allCustomers.length
+      : (
+          await db
+            .select({ count: sql<number>`count(*)` })
+            .from(customers)
+            .where(and(...whereParts))
+        )[0]?.count || 0;
 
     const customerIds = allCustomers.map((c) => c.id);
     const customerTagsData =
@@ -136,10 +155,13 @@ export async function GET(request: NextRequest) {
         .filter((ct) => ct.customerId === customer.id)
         .map((ct) => ({ id: ct.tagId, name: ct.tagName, color: ct.tagColor })),
     }));
+    const orderedCustomers = lookupByIds
+      ? [...customersWithTags].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
+      : customersWithTags;
 
     return NextResponse.json({
       requestId,
-      customers: customersWithTags,
+      customers: orderedCustomers,
       pagination: {
         page,
         limit,
@@ -178,7 +200,7 @@ export async function POST(request: NextRequest) {
         firstName: body.firstName,
         lastName: body.lastName || null,
         company: body.company || null,
-        email: body.email || null,
+        email: body.email ? body.email.toLowerCase() : null,
         phone: body.phone || null,
         mobile: body.mobile || null,
         street: body.street || null,

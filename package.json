@@ -13,6 +13,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:check": "drizzle-kit check",
+    "db:migrate:production": "node scripts/migrate-production.mjs",
     "worker:email": "tsx src/worker/email-worker.ts",
     "worker:email:once": "tsx src/worker/email-worker.ts --once",
     "audit:stubs": "tsx scripts/audit-stubs.ts",

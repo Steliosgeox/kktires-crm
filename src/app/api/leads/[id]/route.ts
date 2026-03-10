@@ -1,9 +1,10 @@
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/lib/db';
 import { leads } from '@/lib/db/schema';
+import { createRequestId, handleApiError, jsonError, withValidatedBody } from '@/server/api/http';
 import { getOrgIdFromSession, requireSession } from '@/server/authz';
 
 const LeadPatchSchema = z.object({
@@ -22,13 +23,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const orgId = getOrgIdFromSession(session);
+  const requestId = createRequestId();
 
   try {
+    const session = await requireSession();
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
+    const orgId = getOrgIdFromSession(session);
     const { id } = await params;
-    const body = LeadPatchSchema.parse(await request.json());
+    const body = await withValidatedBody(request, LeadPatchSchema, { maxBytes: 120_000 });
 
     const [updated] = await db
       .update(leads)
@@ -36,7 +38,7 @@ export async function PATCH(
         ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
         ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
         ...(body.company !== undefined ? { company: body.company } : {}),
-        ...(body.email !== undefined ? { email: body.email } : {}),
+        ...(body.email !== undefined ? { email: body.email ? body.email.toLowerCase() : null } : {}),
         ...(body.phone !== undefined ? { phone: body.phone } : {}),
         ...(body.source !== undefined ? { source: body.source } : {}),
         ...(body.status !== undefined ? { status: body.status } : {}),
@@ -47,14 +49,12 @@ export async function PATCH(
       .where(and(eq(leads.id, id), eq(leads.orgId, orgId)))
       .returning();
 
-    if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json(updated);
+    if (!updated) return jsonError('Lead not found', 404, 'NOT_FOUND', requestId);
+    return NextResponse.json({ ...updated, requestId });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
-    }
-    console.error('[leads/:id] PATCH error:', error);
-    return NextResponse.json({ error: 'Failed to update lead' }, { status: 500 });
+    return handleApiError('leads:id:patch', error, requestId, {
+      message: 'Failed to update lead',
+    });
   }
 }
 
@@ -69,21 +69,23 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const orgId = getOrgIdFromSession(session);
+  const requestId = createRequestId();
 
   try {
+    const session = await requireSession();
+    if (!session) return jsonError('Unauthorized', 401, 'UNAUTHORIZED', requestId);
+    const orgId = getOrgIdFromSession(session);
     const { id } = await params;
     const [deleted] = await db
       .delete(leads)
       .where(and(eq(leads.id, id), eq(leads.orgId, orgId)))
       .returning({ id: leads.id });
 
-    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ ok: true });
+    if (!deleted) return jsonError('Lead not found', 404, 'NOT_FOUND', requestId);
+    return NextResponse.json({ ok: true, requestId });
   } catch (error) {
-    console.error('[leads/:id] DELETE error:', error);
-    return NextResponse.json({ error: 'Failed to delete lead' }, { status: 500 });
+    return handleApiError('leads:id:delete', error, requestId, {
+      message: 'Failed to delete lead',
+    });
   }
 }

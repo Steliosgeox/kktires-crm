@@ -93,6 +93,7 @@ export function CampaignRecipientsDrawer({
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   // Reset and fetch whenever drawer opens
   useEffect(() => {
@@ -103,11 +104,12 @@ export function CampaignRecipientsDrawer({
     setActiveFilter('all');
     setSearch('');
     setCopied(false);
+    setCopiedEmail(null);
     setLoading(true);
 
     void (async () => {
       try {
-        const res = await fetch(`/api/campaigns/${campaignId}/recipients?limit=500`);
+        const res = await fetch(`/api/campaigns/${campaignId}/recipients?limit=10000`);
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
         const data = (await res.json()) as RecipientsApiResponse;
         setRecipients(data.recipients ?? []);
@@ -137,6 +139,16 @@ export function CampaignRecipientsDrawer({
       setCopied(true);
       toast.success('Αντιγράφηκαν', `${filteredRecipients.length} email αντιγράφηκαν.`);
       setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleCopyOne = (email: string) => {
+    void navigator.clipboard.writeText(email).then(() => {
+      setCopiedEmail(email);
+      toast.success('Αντιγράφηκε', email);
+      setTimeout(() => {
+        setCopiedEmail((current) => (current === email ? null : current));
+      }, 2000);
     });
   };
 
@@ -366,6 +378,23 @@ export function CampaignRecipientsDrawer({
                           {sentAtFormatted}
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyOne(recipient.email)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px]"
+                        style={{
+                          background: 'rgba(255,255,255,0.04)',
+                          border: '1px solid var(--outlook-border)',
+                          color: 'var(--outlook-text-secondary)',
+                        }}
+                      >
+                        {copiedEmail === recipient.email ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                        Αντιγραφή
+                      </button>
                     </div>
                   </li>
                 );

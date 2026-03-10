@@ -84,7 +84,8 @@ function normalizeCustomer(raw: WPFCustomer): {
   const firstName = raw.FirstName || raw.firstName || raw.first_name || 'Unknown';
   const lastName = raw.LastName || raw.lastName || raw.last_name || null;
   const company = raw.Company || raw.company || null;
-  const email = raw.Email || raw.email || null;
+  const rawEmail = raw.Email || raw.email || null;
+  const email = typeof rawEmail === 'string' && rawEmail.trim() ? rawEmail.trim().toLowerCase() : null;
   const phone = raw.Phone || raw.phone || null;
   const mobile = raw.Mobile || raw.mobile || null;
   const address = raw.Address || raw.address || null;
