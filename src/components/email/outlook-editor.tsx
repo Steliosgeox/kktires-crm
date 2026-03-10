@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import dynamic from 'next/dynamic';
 import {
   Send,
   Clock,
@@ -29,6 +30,21 @@ import { toast } from '@/lib/stores/ui-store';
 import { sanitizeHtml } from '@/lib/html-sanitize';
 import { type RecipientFilters } from '@/lib/email/recipient-filters';
 import { messagesEl } from '@/lib/i18n/ui/messages-el';
+import { type CKEditorInstance } from '@/components/email/ck-email-editor';
+
+// Dynamically import CKEditor wrapper to avoid SSR issues.
+const CKEmailEditor = dynamic(
+  () => import('@/components/email/ck-email-editor').then((m) => ({ default: m.CKEmailEditor })),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="min-h-[300px] animate-pulse rounded-sm"
+        style={{ background: 'var(--outlook-bg-hover)' }}
+      />
+    ),
+  }
+);
 
 interface Template {
   id: string;
@@ -145,10 +161,10 @@ export function OutlookEditor({
   const [customWidth, setCustomWidth] = useState('');
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
-  const editorRef = useRef<HTMLDivElement>(null);
+  // CKEditor instance ref — replaces the old contentEditable HTMLDivElement ref.
+  const editorRef = useRef<CKEditorInstance | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
-  const lastAppliedRef = useRef<{ key: string; content: string } | null>(null);
 
   const totalRecipients = recipientCount ?? 0;
   const hasRecipients = totalRecipients > 0;
@@ -159,61 +175,62 @@ export function OutlookEditor({
   const sendDisabled = saving || sending || !hasRecipients || actionsLocked;
   const scheduleDisabled = saving || sending || !hasRecipients || actionsLocked;
 
-  // Keep the contentEditable in sync when switching campaigns (without clobbering user typing).
+  // Track the campaign key to detect when the user switches to a different campaign.
+  // On campaign switch we push the new content into the CKEditor instance.
+  const lastCampaignKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
+    const key = `${campaignId ?? 'new'}:${isNew ? 'new' : 'existing'}`;
+    if (lastCampaignKeyRef.current === key) return;
+    lastCampaignKeyRef.current = key;
+
     const editor = editorRef.current;
     if (!editor) return;
 
-    const key = `${campaignId ?? 'new'}:${isNew ? 'new' : 'existing'}`;
-    const isFocused = editor.contains(document.activeElement);
-
-    // When changing campaigns/new state, clear immediately to avoid showing stale content.
-    if (!lastAppliedRef.current || lastAppliedRef.current.key !== key) {
-      lastAppliedRef.current = { key, content: '' };
-      if (!isFocused) editor.innerHTML = '';
-      return;
-    }
-
-    // Apply new content only if we're not actively editing.
     const next = sanitizeHtml(content || '');
-    if (isFocused) return;
-    if (lastAppliedRef.current.content === next) return;
+    editor.setData(next);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId, isNew]);
 
-    editor.innerHTML = next;
-    for (const image of inlineImages) {
-      const element = Array.from(editor.querySelectorAll<HTMLImageElement>('img')).find(
-        (img) => img.dataset.emailAssetId === image.assetId
-      );
-      if (!element) continue;
-      element.style.height = 'auto';
-      element.style.maxWidth = '100%';
-      element.style.display = image.align ? 'block' : '';
-      if (image.widthPx) {
-        element.style.width = `${image.widthPx}px`;
-        element.width = image.widthPx;
-      }
-      if (image.align === 'left') {
-        element.style.marginLeft = '0';
-        element.style.marginRight = 'auto';
-      } else if (image.align === 'center') {
-        element.style.marginLeft = 'auto';
-        element.style.marginRight = 'auto';
-      } else if (image.align === 'right') {
-        element.style.marginLeft = 'auto';
-        element.style.marginRight = '0';
-      }
-      if (image.alt != null) {
-        element.alt = image.alt;
-      }
-    }
-    lastAppliedRef.current.content = next;
-  }, [campaignId, isNew, content, inlineImages]);
-
+  /**
+   * Execute a CKEditor command by name.
+   * Maps old document.execCommand names to CKEditor 5 command names.
+   */
   const applyEditorCommand = (command: string, value?: string) => {
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    document.execCommand(command, false, value);
-    updateContentAndInlineRefs(editorRef.current.innerHTML);
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    // Map legacy execCommand names → CKEditor 5 command names
+    const commandMap: Record<string, string> = {
+      bold: 'bold',
+      italic: 'italic',
+      underline: 'underline',
+      insertUnorderedList: 'bulletedList',
+      insertOrderedList: 'numberedList',
+      justifyLeft: 'alignment',
+      justifyCenter: 'alignment',
+      justifyRight: 'alignment',
+      justifyFull: 'alignment',
+    };
+
+    const ckCommand = commandMap[command] ?? command;
+
+    if (command === 'justifyLeft') {
+      editor.execute('alignment', { value: 'left' });
+    } else if (command === 'justifyCenter') {
+      editor.execute('alignment', { value: 'center' });
+    } else if (command === 'justifyRight') {
+      editor.execute('alignment', { value: 'right' });
+    } else if (command === 'justifyFull') {
+      editor.execute('alignment', { value: 'justify' });
+    } else if (command === 'createLink' && value) {
+      editor.execute('link', value);
+    } else if (value !== undefined) {
+      editor.execute(ckCommand, { value });
+    } else {
+      editor.execute(ckCommand);
+    }
+    // Content state is updated via CKEditor's onChange callback — no manual sync needed.
   };
 
   const selectedImageConfig = selectedImageAssetId
@@ -381,17 +398,23 @@ export function OutlookEditor({
         height: optimized.height ?? undefined,
       });
 
-      if (!editorRef.current) return;
-      editorRef.current.focus();
+      const editor = editorRef.current;
+      if (!editor) return;
 
       if (pendingReplaceAssetId) {
-        const existing = Array.from(editorRef.current.querySelectorAll<HTMLImageElement>('img')).find(
+        // Replace an existing asset image: mutate the HTML directly via setData.
+        const currentHtml = editor.getData();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(currentHtml, 'text/html');
+        const existing = Array.from(doc.querySelectorAll<HTMLImageElement>('img')).find(
           (img) => img.dataset.emailAssetId === pendingReplaceAssetId
         );
         if (existing) {
           const currentConfig = inlineImages.find((item) => item.assetId === pendingReplaceAssetId);
           existing.src = asset.blobUrl;
           existing.dataset.emailAssetId = asset.id;
+          const updatedHtml = doc.body.innerHTML;
+          editor.setData(updatedHtml);
           const withoutOld = inlineImages
             .filter((item) => item.assetId !== pendingReplaceAssetId)
             .map((item, index) => ({ ...item, sortOrder: index }));
@@ -404,18 +427,18 @@ export function OutlookEditor({
             sortOrder: withoutOld.length,
           };
           setInlineImages([...withoutOld, replacement]);
-
           setSelectedImageAssetId(asset.id);
-          updateContentAndInlineRefs(editorRef.current.innerHTML);
+          updateContentAndInlineRefs(updatedHtml);
           return;
         }
       }
 
-      document.execCommand(
-        'insertHTML',
-        false,
-        `<img src="${asset.blobUrl}" data-email-asset-id="${asset.id}" alt="" style="max-width:100%;height:auto;" />`
-      );
+      // Insert a new image at the current cursor position via CKEditor's view change API.
+      const imgHtml = `<img src="${asset.blobUrl}" data-email-asset-id="${asset.id}" alt="" style="max-width:100%;height:auto;" />`;
+      const viewFragment = editor.data.processor.toView(imgHtml);
+      const modelFragment = editor.data.toModel(viewFragment);
+      editor.model.insertContent(modelFragment);
+
       upsertInlineImageConfig({
         assetId: asset.id,
         embedInline: false,
@@ -425,7 +448,7 @@ export function OutlookEditor({
         sortOrder: inlineImages.length,
       });
       setSelectedImageAssetId(asset.id);
-      updateContentAndInlineRefs(editorRef.current.innerHTML);
+      updateContentAndInlineRefs(editor.getData());
     } catch (error) {
       console.error('Image insert error:', error);
       toast.error(
@@ -484,23 +507,22 @@ export function OutlookEditor({
     if (template.content) {
       const sanitized = sanitizeHtml(template.content);
       updateContentAndInlineRefs(sanitized);
-      if (editorRef.current) {
-        editorRef.current.innerHTML = sanitized;
-      }
+      editorRef.current?.setData(sanitized);
     }
     setShowTemplates(false);
   };
 
   const handleInsertVariable = (tag: string) => {
-    if (editorRef.current) {
-      const selection = window.getSelection();
-      if (selection && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const textNode = document.createTextNode(tag);
-        range.insertNode(textNode);
-        range.collapse(false);
-        updateContentAndInlineRefs(editorRef.current.innerHTML);
-      }
+    const editor = editorRef.current;
+    if (editor) {
+      // Insert the variable tag as plain text at the current cursor position.
+      editor.model.change((writer) => {
+        const insertPosition = editor.model.document.selection.getFirstPosition();
+        if (insertPosition) {
+          writer.insertText(tag, insertPosition);
+        }
+      });
+      updateContentAndInlineRefs(editor.getData());
     }
     setShowVariables(false);
   };
@@ -508,7 +530,7 @@ export function OutlookEditor({
   const handleAiAssist = async (action: 'improve' | 'expand' | 'subjects') => {
     setAiLoading(true);
     try {
-      const currentContent = editorRef.current?.innerHTML || content;
+      const currentContent = editorRef.current?.getData() ?? content;
 
       if (action === 'expand') {
         const response = await fetch('/api/ai/email-expand', {
@@ -521,9 +543,7 @@ export function OutlookEditor({
           if (data.generatedText) {
             const sanitized = sanitizeHtml(String(data.generatedText));
             updateContentAndInlineRefs(sanitized);
-            if (editorRef.current) {
-              editorRef.current.innerHTML = sanitized;
-            }
+            editorRef.current?.setData(sanitized);
           }
         }
       } else if (action === 'improve') {
@@ -537,9 +557,7 @@ export function OutlookEditor({
           if (data.improved) {
             const sanitized = sanitizeHtml(String(data.improved));
             updateContentAndInlineRefs(sanitized);
-            if (editorRef.current) {
-              editorRef.current.innerHTML = sanitized;
-            }
+            editorRef.current?.setData(sanitized);
           }
         }
       } else if (action === 'subjects') {
@@ -563,11 +581,18 @@ export function OutlookEditor({
   };
 
   useEffect(() => {
-    if (!selectedImageAssetId || !editorRef.current) return;
+    const editor = editorRef.current;
+    if (!selectedImageAssetId || !editor) return;
     const config = inlineImages.find((image) => image.assetId === selectedImageAssetId);
     if (!config) return;
 
-    const element = Array.from(editorRef.current.querySelectorAll<HTMLImageElement>('img')).find(
+    // Apply image style changes by mutating the HTML through setData.
+    // CKEditor's image plugin wraps images in <figure> elements; we manipulate
+    // the raw HTML output directly to preserve our custom data-email-asset-id attributes.
+    const currentHtml = editor.getData();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(currentHtml, 'text/html');
+    const element = Array.from(doc.querySelectorAll<HTMLImageElement>('img')).find(
       (img) => img.dataset.emailAssetId === selectedImageAssetId
     );
     if (!element) return;
@@ -599,7 +624,9 @@ export function OutlookEditor({
     }
 
     element.alt = config.alt || '';
-    updateContentAndInlineRefs(editorRef.current.innerHTML);
+    const updatedHtml = doc.body.innerHTML;
+    editor.setData(updatedHtml);
+    updateContentAndInlineRefs(updatedHtml);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedImageConfig?.widthPx, selectedImageConfig?.align, selectedImageConfig?.alt]);
 
@@ -1249,7 +1276,9 @@ export function OutlookEditor({
                   key={pct}
                   type="button"
                   onClick={() => {
-                    const editorWidth = Math.max(320, editorRef.current?.clientWidth || 800);
+                    // Get the width of the CKEditor editable element from the DOM
+                    const ckEditable = document.querySelector('.ck-email-editor-wrapper .ck-editor__editable');
+                    const editorWidth = Math.max(320, (ckEditable as HTMLElement | null)?.clientWidth || 800);
                     const width = Math.round((editorWidth * pct) / 100);
                     setInlineImages(
                       inlineImages.map((item, index) =>
@@ -1367,19 +1396,27 @@ export function OutlookEditor({
               <button
                 type="button"
                 onClick={() => {
-                  if (!selectedImageAssetId || !editorRef.current) return;
                   const editor = editorRef.current;
-                  const element = Array.from(editor.querySelectorAll<HTMLImageElement>('img')).find(
+                  if (!selectedImageAssetId || !editor) return;
+                  // Remove image by mutating the HTML via setData.
+                  const currentHtml = editor.getData();
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(currentHtml, 'text/html');
+                  const element = Array.from(doc.querySelectorAll<HTMLImageElement>('img')).find(
                     (img) => img.dataset.emailAssetId === selectedImageAssetId
                   );
-                  element?.remove();
+                  // Also remove the parent <figure> if CKEditor wrapped the image
+                  const toRemove = element?.closest('figure') ?? element;
+                  toRemove?.remove();
+                  const updatedHtml = doc.body.innerHTML;
+                  editor.setData(updatedHtml);
                   setInlineImages(
                     inlineImages
                       .filter((item) => item.assetId !== selectedImageAssetId)
                       .map((item, index) => ({ ...item, sortOrder: index }))
                   );
                   setSelectedImageAssetId(null);
-                  updateContentAndInlineRefs(editor.innerHTML);
+                  updateContentAndInlineRefs(updatedHtml);
                 }}
                 className="px-2 py-1 text-xs rounded-md"
                 style={{ background: 'var(--outlook-error-bg)', color: 'var(--outlook-error)' }}
@@ -1487,26 +1524,12 @@ export function OutlookEditor({
                 />
               </div>
             ) : (
-              <div
-                ref={editorRef}
-                contentEditable
-                dir="ltr"
-                className="min-h-[300px] outline-none prose prose-sm max-w-none"
-                style={{
-                  color: 'var(--outlook-text-primary)',
-                  direction: 'ltr',
-                  textAlign: 'left',
-                }}
-                onInput={(e) => updateContentAndInlineRefs(e.currentTarget.innerHTML)}
-                onClick={(e) => {
-                  const target = e.target as HTMLElement | null;
-                  if (!target) return;
-                  const img = target.closest('img');
-                  const assetId = img instanceof HTMLImageElement ? img.dataset.emailAssetId || null : null;
-                  setSelectedImageAssetId(assetId);
-                }}
-                data-placeholder="Γράψτε το μήνυμά σας εδώ..."
-                suppressContentEditableWarning
+              <CKEmailEditor
+                value={content}
+                onChange={updateContentAndInlineRefs}
+                editorInstanceRef={editorRef}
+                readOnly={actionsLocked}
+                onImageClick={setSelectedImageAssetId}
               />
             )}
           </div>

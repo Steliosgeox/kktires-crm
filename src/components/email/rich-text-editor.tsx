@@ -1,3 +1,4 @@
+// LEGACY: not imported by production UI — candidate for removal in a future cleanup PR
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';

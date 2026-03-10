@@ -10,6 +10,8 @@ interface OutlookLayoutProps {
   showEditor?: boolean;
 }
 
+const SIDEBAR_DEFAULT_WIDTH = 240; // matches --outlook-sidebar-width CSS variable
+
 export function OutlookLayout({ sidebar, list, editor, showEditor = true }: OutlookLayoutProps) {
   const theme = useUIStore((state) => state.theme);
   const [listWidth, setListWidth] = useState(360);
@@ -24,9 +26,9 @@ export function OutlookLayout({ sidebar, list, editor, showEditor = true }: Outl
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
       if (!isDragging || !containerRef.current) return;
-      
+
       const containerRect = containerRef.current.getBoundingClientRect();
-      const sidebarWidth = 240;
+      const sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
       const newListWidth = e.clientX - containerRect.left - sidebarWidth;
       
       // Constrain between 280px and 500px

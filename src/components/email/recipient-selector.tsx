@@ -1,3 +1,4 @@
+// LEGACY: not imported by production UI — candidate for removal in a future cleanup PR
 'use client';
 
 import { useMemo, useState } from 'react';

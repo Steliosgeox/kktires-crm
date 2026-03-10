@@ -356,6 +356,108 @@
   animation: outlook-scale-in var(--outlook-transition-normal) forwards;
 }
 
+/* ===== CKEDITOR 5 DARK THEME OVERRIDES ===== */
+/*
+ * Applied inside .dark / [data-theme="dark"] so they only take effect in dark mode.
+ * CKEditor renders its toolbar and editable area in the host document (no iframe),
+ * so standard CSS cascade applies.
+ */
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-editor__main .ck-editor__editable,
+.dark .ck-email-editor-wrapper .ck.ck-editor__main .ck-editor__editable {
+  background: var(--outlook-bg-panel) !important;
+  color: var(--outlook-text-primary) !important;
+  border-color: var(--outlook-border) !important;
+  min-height: 300px;
+}
+
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-editor__main .ck-editor__editable:focus,
+.dark .ck-email-editor-wrapper .ck.ck-editor__main .ck-editor__editable:focus {
+  border-color: var(--outlook-border-focus) !important;
+  box-shadow: var(--outlook-shadow-focus) !important;
+}
+
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-toolbar,
+.dark .ck-email-editor-wrapper .ck.ck-toolbar {
+  background: var(--outlook-bg-surface) !important;
+  border-color: var(--outlook-border) !important;
+}
+
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-toolbar .ck-button,
+.dark .ck-email-editor-wrapper .ck.ck-toolbar .ck-button {
+  color: var(--outlook-text-secondary) !important;
+}
+
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-toolbar .ck-button:hover,
+.dark .ck-email-editor-wrapper .ck.ck-toolbar .ck-button:hover {
+  color: var(--outlook-text-primary) !important;
+  background: var(--outlook-bg-hover) !important;
+}
+
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-toolbar .ck-button.ck-on,
+.dark .ck-email-editor-wrapper .ck.ck-toolbar .ck-button.ck-on {
+  color: var(--outlook-accent) !important;
+  background: var(--outlook-accent-light) !important;
+}
+
+[data-theme="dark"] .ck-email-editor-wrapper .ck.ck-toolbar__separator,
+.dark .ck-email-editor-wrapper .ck.ck-toolbar__separator {
+  background: var(--outlook-border) !important;
+}
+
+/* Dropdown panels (link, alignment picker, etc.) */
+[data-theme="dark"] .ck.ck-balloon-panel,
+.dark .ck.ck-balloon-panel {
+  background: var(--outlook-bg-panel) !important;
+  border-color: var(--outlook-border) !important;
+  box-shadow: var(--outlook-shadow-lg) !important;
+}
+
+[data-theme="dark"] .ck.ck-balloon-panel .ck-button,
+.dark .ck.ck-balloon-panel .ck-button {
+  color: var(--outlook-text-secondary) !important;
+}
+
+[data-theme="dark"] .ck.ck-balloon-panel .ck-button:hover,
+.dark .ck.ck-balloon-panel .ck-button:hover {
+  color: var(--outlook-text-primary) !important;
+  background: var(--outlook-bg-hover) !important;
+}
+
+[data-theme="dark"] .ck.ck-input,
+.dark .ck.ck-input {
+  background: var(--outlook-bg-surface) !important;
+  border-color: var(--outlook-border) !important;
+  color: var(--outlook-text-primary) !important;
+}
+
+[data-theme="dark"] .ck.ck-input:focus,
+.dark .ck.ck-input:focus {
+  border-color: var(--outlook-border-focus) !important;
+}
+
+[data-theme="dark"] .ck.ck-label,
+.dark .ck.ck-label {
+  color: var(--outlook-text-secondary) !important;
+}
+
+/* Tooltip */
+[data-theme="dark"] .ck.ck-tooltip__text,
+.dark .ck.ck-tooltip__text {
+  background: var(--outlook-bg-surface) !important;
+  color: var(--outlook-text-primary) !important;
+}
+
+/* Powered-by badge — hide in both themes */
+.ck-email-editor-wrapper .ck.ck-powered-by {
+  display: none !important;
+}
+
+/* Light theme — keep CKEditor default white but fix border to match */
+.ck-email-editor-wrapper .ck.ck-editor__main .ck-editor__editable {
+  min-height: 300px;
+  border-color: var(--outlook-border) !important;
+}
+
 /* ===== FROSTED GLASS EFFECT ===== */
 .outlook-frosted {
   backdrop-filter: blur(20px) saturate(180%);

@@ -122,7 +122,11 @@ export function OutlookList({
 
   const handleContextMenu = (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    setContextMenu({ id, x: e.clientX, y: e.clientY });
+    const MENU_WIDTH = 200;
+    const MENU_HEIGHT = 136;
+    const x = Math.min(e.clientX, window.innerWidth - MENU_WIDTH - 8);
+    const y = Math.min(e.clientY, window.innerHeight - MENU_HEIGHT - 8);
+    setContextMenu({ id, x, y });
   };
 
   const closeContextMenu = () => {
@@ -268,9 +272,17 @@ export function OutlookList({
               return (
                 <div
                   key={item.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelect(item.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelect(item.id);
+                    }
+                  }}
                   onContextMenu={(e) => handleContextMenu(e, item.id)}
-                  className="relative cursor-pointer transition-all group"
+                  className="relative cursor-pointer transition-all group outline-none focus-visible:ring-2 focus-visible:ring-inset"
                   style={{
                     background: isSelected ? 'var(--outlook-bg-selected)' : 'transparent',
                     borderLeft: isSelected ? '3px solid var(--outlook-accent)' : '3px solid transparent',
@@ -354,8 +366,8 @@ export function OutlookList({
                   </div>
 
                   {/* Hover Actions */}
-                  <div 
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
+                  <div
+                    className={`absolute top-2 right-2 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity flex items-center gap-1`}
                     style={{ background: 'var(--outlook-bg-panel)' }}
                   >
                     <button

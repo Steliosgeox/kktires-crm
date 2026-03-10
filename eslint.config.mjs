@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Local tooling / one-off scripts (not shipped).
     "scripts/**",
+    // Claude Code worktrees and local config (not part of the project source).
+    "**/.claude/**",
   ]),
   {
     rules: {
