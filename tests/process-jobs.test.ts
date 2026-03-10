@@ -5,7 +5,7 @@ import { createClient, type Client } from '@libsql/client';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
 import { migrate } from 'drizzle-orm/libsql/migrator';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { vi } from 'vitest';
 
 import * as schema from '../src/lib/db/schema';
 
@@ -22,12 +22,22 @@ vi.mock('@/server/email/transport', () => ({
   sendEmail: mockSendEmail,
 }));
 
-type ProcessJobsModule = typeof import('../src/server/email/process-jobs');
+type ProcessJobsModule = typeof import('@/server/email/process-jobs');
 let processJobsModule: ProcessJobsModule;
 let client: Client;
 let db: LibSQLDatabase<typeof schema>;
 
-async function seedCampaignAndJob(campaignId: string) {
+async function seedCampaignAndJob(
+  campaignId: string,
+  recipientFilters: Partial<{
+    cities: string[];
+    tags: string[];
+    segments: string[];
+    categories: string[];
+    customerIds: string[];
+    rawEmails: string[];
+  }> = {}
+) {
   const now = new Date();
   await db.insert(schema.emailCampaigns).values({
     id: campaignId,
@@ -37,12 +47,12 @@ async function seedCampaignAndJob(campaignId: string) {
     content: '<p>Hello {{firstName}}</p>',
     status: 'draft',
     recipientFilters: {
-      cities: [],
-      tags: [],
-      segments: [],
-      categories: [],
-      customerIds: [],
-      rawEmails: [],
+      cities: recipientFilters.cities || [],
+      tags: recipientFilters.tags || [],
+      segments: recipientFilters.segments || [],
+      categories: recipientFilters.categories || [],
+      customerIds: recipientFilters.customerIds || [],
+      rawEmails: recipientFilters.rawEmails || [],
     },
     totalRecipients: 0,
     sentCount: 0,
@@ -130,7 +140,7 @@ describe('processDueEmailJobs', () => {
     });
 
     vi.resetModules();
-    processJobsModule = await import('../src/server/email/process-jobs');
+    processJobsModule = await import('@/server/email/process-jobs');
   });
 
   beforeEach(async () => {
@@ -176,10 +186,39 @@ describe('processDueEmailJobs', () => {
     expect(job?.lastError).toContain('No recipients');
   });
 
+  it('does not treat an empty recipient selection as all customers', async () => {
+    await seedCustomer('cust_empty_1', 'empty-one@example.com', 'Empty One');
+    await seedCustomer('cust_empty_2', 'empty-two@example.com', 'Empty Two');
+    await seedCampaignAndJob('camp_empty_selection');
+
+    await processJobsModule.processDueEmailJobs({
+      workerId: 'worker-test',
+      timeBudgetMs: 10_000,
+      maxJobs: 1,
+    });
+
+    const campaign = await db.query.emailCampaigns.findFirst({
+      where: (c, { eq: whereEq }) => whereEq(c.id, 'camp_empty_selection'),
+    });
+    const job = await db.query.emailJobs.findFirst({
+      where: (j, { eq: whereEq }) => whereEq(j.id, 'job_camp_empty_selection'),
+    });
+    const recipients = await db
+      .select({ id: schema.campaignRecipients.id })
+      .from(schema.campaignRecipients)
+      .where(eq(schema.campaignRecipients.campaignId, 'camp_empty_selection'));
+
+    expect(campaign?.status).toBe('failed');
+    expect(job?.status).toBe('failed');
+    expect(recipients).toHaveLength(0);
+  });
+
   it('finalizes campaign as sent when at least one recipient succeeds', async () => {
     await seedCustomer('cust_1', 'one@example.com', 'One');
     await seedCustomer('cust_2', 'two@example.com', 'Two');
-    await seedCampaignAndJob('camp_partial_fail');
+    await seedCampaignAndJob('camp_partial_fail', {
+      customerIds: ['cust_1', 'cust_2'],
+    });
 
     let callCount = 0;
     mockSendEmail.mockImplementation(async () => {
@@ -228,7 +267,9 @@ describe('processDueEmailJobs', () => {
   it('finalizes campaign as sent when all recipients are delivered', async () => {
     await seedCustomer('cust_3', 'three@example.com', 'Three');
     await seedCustomer('cust_4', 'four@example.com', 'Four');
-    await seedCampaignAndJob('camp_all_sent');
+    await seedCampaignAndJob('camp_all_sent', {
+      customerIds: ['cust_3', 'cust_4'],
+    });
 
     mockSendEmail.mockResolvedValue({
       ok: true,
@@ -257,7 +298,9 @@ describe('processDueEmailJobs', () => {
 
   it('resets stale processing job-items and resumes delivery', async () => {
     await seedCustomer('cust_5', 'five@example.com', 'Five');
-    await seedCampaignAndJob('camp_resume_stale');
+    await seedCampaignAndJob('camp_resume_stale', {
+      customerIds: ['cust_5'],
+    });
 
     const now = new Date();
     await db.insert(schema.campaignRecipients).values({

@@ -122,6 +122,14 @@ export default function EmailPage() {
   );
   const selectedCampaignStatus = selectedCampaign?.status ?? null;
   const usesDeliverySnapshot = ['sent', 'sending', 'failed'].includes(selectedCampaign?.status ?? '');
+  const defaultSignatureId = useMemo(
+    () => signatures.find((signature) => signature.isDefault)?.id ?? null,
+    [signatures]
+  );
+  const previewDrawerKey = useMemo(
+    () => JSON.stringify(recipientFilters),
+    [recipientFilters]
+  );
 
   // Computed folder counts
   const folderCounts = useMemo(() => ({
@@ -198,11 +206,10 @@ export default function EmailPage() {
       if (signaturesRes.ok) {
         const data = await signaturesRes.json();
         setSignatures(data.signatures || []);
-        
-        // Set default signature
+
         const defaultSig = data.signatures?.find((s: Signature) => s.isDefault);
         if (defaultSig) {
-          setSelectedSignature(defaultSig.id);
+          setSelectedSignature((current) => current ?? defaultSig.id);
         }
       } else {
         failures.push(`Signatures: ${await readError(signaturesRes)}`);
@@ -305,14 +312,14 @@ export default function EmailPage() {
   };
 
   // Reset editor state
-  const resetEditor = () => {
+  const resetEditor = (useDefaultSignature = false) => {
     setCampaignName('');
     setSubject('');
     setContent('');
     setRecipientFilters({ ...EMPTY_RECIPIENT_FILTERS });
     setAttachments([]);
     setInlineImages([]);
-    setSelectedSignature(null);
+    setSelectedSignature(useDefaultSignature ? defaultSignatureId : null);
   };
 
   // Handle new campaign
@@ -320,7 +327,7 @@ export default function EmailPage() {
     setSelectedCampaignId(null);
     setIsNew(true);
     setIsEditing(true);
-    resetEditor();
+    resetEditor(true);
     setCampaignName('Νέα Καμπάνια');
   };
 
@@ -348,7 +355,7 @@ export default function EmailPage() {
             sortOrder: Number.isFinite(image.sortOrder) ? image.sortOrder : index,
           }))
         );
-        setSelectedSignature(campaign.signatureId || null);
+        setSelectedSignature(campaign.signatureId || defaultSignatureId);
       })
       .catch((err) => {
         console.error('Error loading campaign:', err);
@@ -373,6 +380,10 @@ export default function EmailPage() {
   // Handle save
   const handleSave = async (sendNow: boolean) => {
     try {
+      if (sendNow && recipientCount <= 0) {
+        throw new Error('Προσθέστε τουλάχιστον έναν παραλήπτη πριν από την αποστολή.');
+      }
+
       if (sendNow) {
         setSending(true);
       } else {
@@ -452,6 +463,10 @@ export default function EmailPage() {
 
   const handleSchedule = async (runAtIso: string) => {
     try {
+      if (recipientCount <= 0) {
+        throw new Error('Προσθέστε τουλάχιστον έναν παραλήπτη πριν από τον προγραμματισμό.');
+      }
+
       setSaving(true);
 
       const payload = {
@@ -570,12 +585,33 @@ export default function EmailPage() {
 
   // Handle duplicate
   const handleDuplicate = async (id: string) => {
-    const campaign = campaigns.find((c) => c.id === id);
-    if (campaign) {
+    try {
+      const response = await fetch(`/api/campaigns/${id}`);
+      if (!response.ok) {
+        const failure = await readApiFailure(response, 'Failed to duplicate campaign');
+        if (failure.unauthorized) {
+          router.push('/login');
+        }
+        throw new Error(formatApiFailure(failure));
+      }
+
+      const campaign = await response.json();
       handleNewCampaign();
       setCampaignName(`${campaign.name} (Αντίγραφο)`);
-      setSubject(campaign.subject);
+      setSubject(campaign.subject || '');
       setContent(campaign.content || '');
+      setRecipientFilters(normalizeRecipientFiltersClient(campaign.recipientFilters));
+      setAttachments(campaign.assets?.attachments || []);
+      setInlineImages(
+        (campaign.assets?.inlineImages || []).map((image: InlineImageConfig, index: number) => ({
+          ...image,
+          sortOrder: Number.isFinite(image.sortOrder) ? image.sortOrder : index,
+        }))
+      );
+      setSelectedSignature(campaign.signatureId || defaultSignatureId);
+    } catch (err) {
+      console.error('Error duplicating campaign:', err);
+      setError(err instanceof Error ? err.message : 'Αποτυχία αντιγραφής καμπάνιας');
     }
   };
 
@@ -668,8 +704,9 @@ export default function EmailPage() {
       />
 
       {/* Recipient View Drawer — sent campaigns use stored recipients, drafts use live preview */}
-      {selectedCampaignId && usesDeliverySnapshot && (
+      {showRecipientsViewDrawer && selectedCampaignId && usesDeliverySnapshot && (
         <CampaignRecipientsDrawer
+          key={`snapshot:${selectedCampaignId}`}
           isOpen={showRecipientsViewDrawer}
           onClose={() => setShowRecipientsViewDrawer(false)}
           campaignId={selectedCampaignId}
@@ -678,6 +715,7 @@ export default function EmailPage() {
       )}
       {showRecipientsViewDrawer && !usesDeliverySnapshot && (
         <RecipientPreviewDrawer
+          key={`preview:${previewDrawerKey}`}
           isOpen={showRecipientsViewDrawer}
           onClose={() => setShowRecipientsViewDrawer(false)}
           campaignName={campaignName}

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Copy, Loader2, Mail, Search, User, Users, X } from 'lucide-react';
+import useSWR from 'swr';
 
 import { type RecipientFilters } from '@/lib/email/recipient-filters';
 import { toast } from '@/lib/stores/ui-store';
@@ -82,47 +83,38 @@ export function RecipientPreviewDrawer({
   campaignName,
   filters,
 }: RecipientPreviewDrawerProps) {
-  const [loading, setLoading] = useState(false);
-  const [recipients, setRecipients] = useState<PreviewRecipient[]>([]);
-  const [summary, setSummary] = useState<PreviewSummary | null>(null);
   const [activeFilter, setActiveFilter] = useState<PreviewSource>('all');
   const [search, setSearch] = useState('');
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   const requestBody = useMemo(() => JSON.stringify({ filters }), [filters]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setRecipients([]);
-    setSummary(null);
-    setActiveFilter('all');
-    setSearch('');
-    setCopiedAll(false);
-    setCopiedEmail(null);
-    setLoading(true);
-
-    void (async () => {
-      try {
-        const res = await fetch('/api/recipients/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: requestBody,
-        });
-        if (!res.ok) {
-          throw new Error(`Request failed: ${res.status}`);
-        }
-        const data = (await res.json()) as PreviewApiResponse;
-        setRecipients(data.recipients ?? []);
-        setSummary(data.summary ?? null);
-      } catch {
-        toast.error('Αποτυχία φόρτωσης', 'Δεν φορτώθηκε η προεπισκόπηση παραληπτών.');
-      } finally {
-        setLoading(false);
+  const requestKey = isOpen ? ['recipient-preview', requestBody] : null;
+  const { data, isLoading } = useSWR<PreviewApiResponse>(
+    requestKey,
+    async ([, body]: [string, string]) => {
+      const res = await fetch('/api/recipients/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      if (!res.ok) {
+        throw new Error(`Request failed: ${res.status}`);
       }
-    })();
-  }, [isOpen, requestBody]);
+      return res.json() as Promise<PreviewApiResponse>;
+    },
+    {
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+      onError: () => {
+        toast.error('Αποτυχία φόρτωσης', 'Δεν φορτώθηκε η προεπισκόπηση παραληπτών.');
+      },
+    }
+  );
+
+  const recipients = data?.recipients ?? [];
+  const summary = data?.summary ?? null;
+  const loading = Boolean(requestKey) && isLoading && !data;
 
   const filteredRecipients = recipients.filter((recipient) => {
     if (activeFilter !== 'all' && recipient.recipientSource !== activeFilter) return false;

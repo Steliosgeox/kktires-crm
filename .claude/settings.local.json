@@ -4,7 +4,18 @@
       "Bash(npx tsc --noEmit --pretty)",
       "Bash(npx tsc:*)",
       "Bash(cat:*)",
-      "Bash(dir \"C:\\\\Users\\\\Stelios\\\\kktires-web\\\\drizzle\")"
+      "Bash(dir \"C:\\\\Users\\\\Stelios\\\\kktires-web\\\\drizzle\")",
+      "Bash(wc:*)",
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node:*)",
+      "mcp__claude_ai_Vercel__get_project",
+      "Bash(git:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

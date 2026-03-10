@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, Copy, Loader2, Search, Users, X } from 'lucide-react';
+import useSWR from 'swr';
 
 import { toast } from '@/lib/stores/ui-store';
 
@@ -87,40 +88,31 @@ export function CampaignRecipientsDrawer({
   campaignId,
   campaignName,
 }: CampaignRecipientsDrawerProps) {
-  const [loading, setLoading] = useState(false);
-  const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [summary, setSummary] = useState<RecipientsApiResponse['summary'] | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
-  // Reset and fetch whenever drawer opens
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setRecipients([]);
-    setSummary(null);
-    setActiveFilter('all');
-    setSearch('');
-    setCopied(false);
-    setCopiedEmail(null);
-    setLoading(true);
-
-    void (async () => {
-      try {
-        const res = await fetch(`/api/campaigns/${campaignId}/recipients?limit=10000`);
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-        const data = (await res.json()) as RecipientsApiResponse;
-        setRecipients(data.recipients ?? []);
-        setSummary(data.summary ?? null);
-      } catch {
+  const requestKey = isOpen ? `/api/campaigns/${campaignId}/recipients?limit=10000` : null;
+  const { data, isLoading } = useSWR<RecipientsApiResponse>(
+    requestKey,
+    async (url: string) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+      return res.json() as Promise<RecipientsApiResponse>;
+    },
+    {
+      revalidateOnFocus: false,
+      keepPreviousData: true,
+      onError: () => {
         toast.error('Αποτυχία φόρτωσης', 'Δεν φορτώθηκαν οι παραλήπτες.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [isOpen, campaignId]);
+      },
+    }
+  );
+
+  const recipients = data?.recipients ?? [];
+  const summary = data?.summary ?? null;
+  const loading = Boolean(requestKey) && isLoading && !data;
 
   // Filtered list (by status pill + search)
   const filteredRecipients = recipients.filter((r) => {

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
+import { MotionProvider } from '@/components/providers/motion-provider';
 import { SessionProvider } from '@/components/providers/session-provider';
 import './globals.css';
 
@@ -76,9 +77,11 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+        <MotionProvider>
+          <SessionProvider>
+            {children}
+          </SessionProvider>
+        </MotionProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

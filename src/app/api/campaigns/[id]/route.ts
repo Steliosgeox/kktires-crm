@@ -112,7 +112,25 @@ export async function PUT(
     const orgId = getOrgIdFromSession(session);
 
     const { id } = await params;
+    const existingCampaign = await db.query.emailCampaigns.findFirst({
+      where: (c, { eq: whereEq, and: whereAnd }) =>
+        whereAnd(whereEq(c.id, id), whereEq(c.orgId, orgId)),
+    });
+
+    if (!existingCampaign) {
+      return jsonError('Campaign not found', 404, 'NOT_FOUND', requestId);
+    }
+
     const body = await withValidatedBody(request, campaignUpdateSchema, { maxBytes: 1_500_000 });
+
+    if (existingCampaign.status === 'sent' || existingCampaign.status === 'sending') {
+      return jsonError(
+        'Campaign content is locked after sending has started',
+        409,
+        'CONFLICT',
+        requestId
+      );
+    }
 
     let scheduledAtDate: Date | null = null;
     if (body.scheduledAt) {

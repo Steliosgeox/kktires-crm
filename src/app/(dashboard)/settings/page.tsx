@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
 import {
   User,
   Building2,
@@ -72,6 +73,30 @@ type PreferencesData = {
   theme: 'dark' | 'light';
 };
 
+type GmailStatus = {
+  connected: boolean;
+  hasRefreshToken: boolean;
+  scope: string | null;
+  email: string | null;
+};
+
+type SettingsBundle = {
+  profile: ProfileData;
+  org: OrgData;
+  preferences: PreferencesData;
+};
+
+async function fetchJson<T>(url: string, fallbackMessage: string): Promise<T> {
+  const response = await fetch(url);
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.error || fallbackMessage);
+  }
+
+  return data as T;
+}
+
 export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { data: session, status: sessionStatus } = useSession();
@@ -79,7 +104,6 @@ export default function SettingsPage() {
   const setTheme = useUIStore((s) => s.setTheme);
 
   const [activeSection, setActiveSection] = useState('profile');
-  const [loading, setLoading] = useState(true);
 
   const [profile, setProfile] = useState<ProfileData>({
     name: null,
@@ -99,14 +123,6 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(DEFAULT_NOTIFICATIONS);
   const [prefsTheme, setPrefsTheme] = useState<'dark' | 'light'>('dark');
   const [savingSection, setSavingSection] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [gmailStatus, setGmailStatus] = useState<{
-    connected: boolean;
-    hasRefreshToken: boolean;
-    scope: string | null;
-    email: string | null;
-  } | null>(null);
 
   useEffect(() => {
     const section = searchParams.get('section');
@@ -116,73 +132,69 @@ export default function SettingsPage() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    fetch('/api/integrations/gmail')
-      .then(async (res) => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then((data) => {
-        if (data) setGmailStatus(data);
-      })
-      .catch(() => undefined);
-  }, []);
+  const { data: gmailStatus } = useSWR<GmailStatus | null>(
+    sessionStatus === 'authenticated' ? '/api/integrations/gmail' : null,
+    async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      return response.json() as Promise<GmailStatus>;
+    },
+    {
+      revalidateOnFocus: false,
+    }
+  );
 
-  useEffect(() => {
-    if (sessionStatus !== 'authenticated') return;
+  const {
+    data: settingsData,
+    error: settingsError,
+    isLoading: settingsLoading,
+  } = useSWR<SettingsBundle>(
+    sessionStatus === 'authenticated' ? 'settings-bundle' : null,
+    async () => {
+      const [profileData, orgData, preferencesData] = await Promise.all([
+        fetchJson<ProfileData>('/api/settings/profile', 'Failed to load profile'),
+        fetchJson<OrgData>('/api/settings/org', 'Failed to load organization'),
+        fetchJson<PreferencesData>('/api/settings/preferences', 'Failed to load preferences'),
+      ]);
 
-    const load = async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const [profileRes, orgRes, prefsRes] = await Promise.all([
-          fetch('/api/settings/profile'),
-          fetch('/api/settings/org'),
-          fetch('/api/settings/preferences'),
-        ]);
-
-        if (!profileRes.ok) {
-          const msg = await profileRes.json().catch(() => null);
-          throw new Error(msg?.error || 'Failed to load profile');
-        }
-        if (!orgRes.ok) {
-          const msg = await orgRes.json().catch(() => null);
-          throw new Error(msg?.error || 'Failed to load organization');
-        }
-        if (!prefsRes.ok) {
-          const msg = await prefsRes.json().catch(() => null);
-          throw new Error(msg?.error || 'Failed to load preferences');
-        }
-
-        const profileData = (await profileRes.json()) as ProfileData;
-        setProfile(profileData);
-
-        const orgData = (await orgRes.json()) as OrgData;
-        const companyProfile = orgData.settings?.companyProfile;
-        setOrg({
-          name: orgData.name || '',
-          vatId: companyProfile?.vatId || '',
-          address: companyProfile?.address || '',
-          city: companyProfile?.city || '',
-          phone: companyProfile?.phone || '',
-          website: companyProfile?.website || '',
-        });
-
-        const prefsData = (await prefsRes.json()) as PreferencesData;
-        setNotifications(prefsData.notifications || DEFAULT_NOTIFICATIONS);
-        setPrefsTheme(prefsData.theme || 'dark');
-        setTheme(prefsData.theme || 'dark');
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Αποτυχία φόρτωσης ρυθμίσεων';
-        setLoadError(message);
+      return {
+        profile: profileData,
+        org: orgData,
+        preferences: preferencesData,
+      };
+    },
+    {
+      revalidateOnFocus: false,
+      onError: (error) => {
+        const message = error instanceof Error ? error.message : 'Αποτυχία φόρτωσης ρυθμίσεων';
         toast.error('Αποτυχία φόρτωσης', message);
-      } finally {
-        setLoading(false);
-      }
-    };
+      },
+    }
+  );
 
-    load().catch(() => undefined);
-  }, [sessionStatus, setTheme]);
+  const loading = sessionStatus === 'authenticated' && settingsLoading;
+  const loadError = settingsError instanceof Error ? settingsError.message : null;
+
+  useEffect(() => {
+    if (!settingsData) return;
+
+    setProfile(settingsData.profile);
+
+    const companyProfile = settingsData.org.settings?.companyProfile;
+    setOrg({
+      name: settingsData.org.name || '',
+      vatId: companyProfile?.vatId || '',
+      address: companyProfile?.address || '',
+      city: companyProfile?.city || '',
+      phone: companyProfile?.phone || '',
+      website: companyProfile?.website || '',
+    });
+
+    const nextTheme = settingsData.preferences.theme || 'dark';
+    setNotifications(settingsData.preferences.notifications || DEFAULT_NOTIFICATIONS);
+    setPrefsTheme(nextTheme);
+    setTheme(nextTheme);
+  }, [settingsData, setTheme]);
 
   const handleSaveProfile = async () => {
     setSavingSection('profile');

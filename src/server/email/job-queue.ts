@@ -5,6 +5,7 @@ import { emailCampaigns, emailJobs } from '@/lib/db/schema';
 import { and, eq, lte, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ensureEmailTransportReady } from './transport';
+import { countRecipients, normalizeRecipientFilters } from './recipients';
 
 export type EmailJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
@@ -31,6 +32,24 @@ function parseRunAt(input: unknown): Date {
   return new Date();
 }
 
+function hasRecipientSelection(filters: {
+  cities?: string[];
+  tags?: string[];
+  segments?: string[];
+  categories?: string[];
+  customerIds?: string[];
+  rawEmails?: string[];
+}) {
+  return (
+    (filters.cities?.length || 0) > 0 ||
+    (filters.tags?.length || 0) > 0 ||
+    (filters.segments?.length || 0) > 0 ||
+    (filters.categories?.length || 0) > 0 ||
+    (filters.customerIds?.length || 0) > 0 ||
+    (filters.rawEmails?.length || 0) > 0
+  );
+}
+
 export async function enqueueCampaignSend(params: {
   orgId: string;
   campaignId: string;
@@ -54,6 +73,35 @@ export async function enqueueCampaignSend(params: {
       status: 409,
       error: 'Campaign is already sent',
       code: 'ALREADY_SENT' as const,
+    };
+  }
+
+  if (!campaign.subject.trim()) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: 'Campaign subject is required before sending',
+      code: 'BAD_REQUEST' as const,
+    };
+  }
+
+  const recipientFilters = normalizeRecipientFilters(campaign.recipientFilters);
+  if (!hasRecipientSelection(recipientFilters)) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: 'Select at least one recipient before sending',
+      code: 'BAD_REQUEST' as const,
+    };
+  }
+
+  const resolvedRecipientCount = await countRecipients(params.orgId, recipientFilters);
+  if (resolvedRecipientCount <= 0) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: 'No recipients with valid email addresses were found',
+      code: 'BAD_REQUEST' as const,
     };
   }
 

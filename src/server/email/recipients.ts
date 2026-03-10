@@ -305,10 +305,11 @@ async function fetchFilterCustomers(
     filters.tags.length > 0 ||
     filters.segments.length > 0 ||
     filters.categories.length > 0;
-  const hasManualCriteria = filters.customerIds.length > 0 || filters.rawEmails.length > 0;
-  const includeAllCustomersByDefault = !hasFilterCriteria && !hasManualCriteria;
 
-  if (!hasFilterCriteria && !includeAllCustomersByDefault) return [];
+  // Never interpret an empty recipient selection as "send to everyone".
+  // The UI treats an empty selection as zero recipients, and the backend must
+  // preserve that invariant to avoid accidental org-wide blasts.
+  if (!hasFilterCriteria) return [];
 
   const whereParts: any[] = [eq(customers.orgId, orgId), sql`${customers.email} IS NOT NULL`];
   if (includeUnsubscribedFilter) {

@@ -162,7 +162,7 @@ describe('API routes (DB-backed)', () => {
     mockAuth.mockResolvedValue(ownerSession());
     mockNormalizeRecipientFilters.mockImplementation((value: unknown) => {
       if (!value || typeof value !== 'object') {
-        return { cities: [], tags: [], segments: [], categories: [] };
+        return { cities: [], tags: [], segments: [], categories: [], customerIds: [], rawEmails: [] };
       }
       const input = value as Record<string, unknown>;
       return {
@@ -170,6 +170,8 @@ describe('API routes (DB-backed)', () => {
         tags: Array.isArray(input.tags) ? input.tags : [],
         segments: Array.isArray(input.segments) ? input.segments : [],
         categories: Array.isArray(input.categories) ? input.categories : [],
+        customerIds: Array.isArray(input.customerIds) ? input.customerIds : [],
+        rawEmails: Array.isArray(input.rawEmails) ? input.rawEmails : [],
       };
     });
     mockEnqueueCampaignSend.mockResolvedValue({
@@ -674,7 +676,14 @@ describe('API routes (DB-backed)', () => {
     expect(createRes.status).toBe(201);
     const created = await createRes.json();
     expect(mockNormalizeRecipientFilters).toHaveBeenCalled();
-    expect(mockCountRecipients).toHaveBeenCalledWith(ORG_ID, { cities: ['Athens'], tags: [], segments: [], categories: [] });
+    expect(mockCountRecipients).toHaveBeenCalledWith(ORG_ID, {
+      cities: ['Athens'],
+      tags: [],
+      segments: [],
+      categories: [],
+      customerIds: [],
+      rawEmails: [],
+    });
 
     const updateRes = await campaignByIdRoute.PUT(
       jsonRequest(`http://localhost/api/campaigns/${created.id}`, 'PUT', {
@@ -740,6 +749,54 @@ describe('API routes (DB-backed)', () => {
       idParams(created.id)
     );
     expect(unauthRes.status).toBe(401);
+  }, 15_000);
+
+  it('campaign update route blocks edits once sending has started', async () => {
+    const campaignByIdRoute = await import('../src/app/api/campaigns/[id]/route');
+    const campaignId = `camp_locked_${Date.now()}`;
+
+    await db.insert(schema.emailCampaigns).values({
+      id: campaignId,
+      orgId: ORG_ID,
+      name: 'Locked Campaign',
+      subject: 'Locked Subject',
+      content: '<p>Locked</p>',
+      status: 'sent',
+      recipientFilters: {
+        cities: [],
+        tags: [],
+        segments: [],
+        categories: [],
+        customerIds: [],
+        rawEmails: [],
+      },
+      totalRecipients: 1,
+      sentCount: 1,
+      openCount: 0,
+      clickCount: 0,
+      bounceCount: 0,
+      unsubscribeCount: 0,
+      createdBy: USER_ID,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      sentAt: new Date(),
+    });
+
+    const updateRes = await campaignByIdRoute.PUT(
+      jsonRequest(`http://localhost/api/campaigns/${campaignId}`, 'PUT', {
+        subject: 'Should Not Change',
+      }) as any,
+      idParams(campaignId) as any
+    );
+
+    expect(updateRes.status).toBe(409);
+    const payload = await updateRes.json();
+    expect(payload.code).toBe('CONFLICT');
+
+    const campaign = await db.query.emailCampaigns.findFirst({
+      where: (c, { eq: whereEq }) => whereEq(c.id, campaignId),
+    });
+    expect(campaign?.subject).toBe('Locked Subject');
   });
 
   it('tags, templates, and segments write routes persist data', async () => {
