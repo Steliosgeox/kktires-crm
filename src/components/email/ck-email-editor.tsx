@@ -33,7 +33,7 @@ import {
 } from 'ckeditor5';
 
 // CKEditor 5 base styles — must be imported once globally.
-import 'ckeditor5/dist/ckeditor5.css';
+import 'ckeditor5/ckeditor5.css';
 
 export type CKEditorInstance = Editor;
 
