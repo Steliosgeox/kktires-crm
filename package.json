@@ -28,12 +28,10 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
-    "@ckeditor/ckeditor5-react": "^11.0.1",
     "@libsql/client": "^0.17.0",
     "@vercel/blob": "^2.2.0",
     "@xyflow/react": "^12.10.0",
     "bcryptjs": "^2.4.3",
-    "ckeditor5": "^47.6.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
