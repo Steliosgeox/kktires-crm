@@ -76,5 +76,16 @@
     "vite-tsconfig-paths": "^6.1.0",
     "vitest": "^4.0.18",
     "xlsx": "^0.18.5"
+  },
+  "overrides": {
+    "glob": {
+      "minimatch": "^3.1.5"
+    },
+    "readdir-glob": {
+      "minimatch": "^5.1.9"
+    },
+    "recharts": {
+      "lodash": "^4.17.23"
+    }
   }
 }
