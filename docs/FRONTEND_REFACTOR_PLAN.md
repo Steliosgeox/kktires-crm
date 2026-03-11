@@ -35,7 +35,7 @@ Files:
 Why:
 
 - `outlook-editor.tsx` is very large and mixes recipient summary, scheduling, asset management, AI helpers, preview, inline image editing, signature selection, and send/save actions in one component.
-- It still depends on `contentEditable` and `document.execCommand`, which is fragile and hard to validate.
+- It now depends on a restored CKEditor integration, but parent-driven HTML mutation for inline images and editor orchestration is still complex and hard to validate.
 - It still uses `dangerouslySetInnerHTML` for preview rendering.
 
 Concrete refactor:

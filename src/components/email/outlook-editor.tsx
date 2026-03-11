@@ -161,8 +161,9 @@ export function OutlookEditor({
   const [customWidth, setCustomWidth] = useState('');
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
-  // CKEditor instance ref — replaces the old contentEditable HTMLDivElement ref.
+  // Live editor references used by toolbar actions and image sizing.
   const editorRef = useRef<CKEditorInstance | null>(null);
+  const editorEditableRef = useRef<HTMLElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
@@ -193,14 +194,13 @@ export function OutlookEditor({
   }, [campaignId, isNew]);
 
   /**
-   * Execute a CKEditor command by name.
-   * Maps old document.execCommand names to CKEditor 5 command names.
+   * Execute a formatting command against the live CKEditor instance.
    */
   const applyEditorCommand = (command: string, value?: string) => {
     const editor = editorRef.current;
     if (!editor) return;
 
-    // Map legacy execCommand names → CKEditor 5 command names
+    // Map toolbar button intents to CKEditor 5 command names.
     const commandMap: Record<string, string> = {
       bold: 'bold',
       italic: 'italic',
@@ -1276,9 +1276,7 @@ export function OutlookEditor({
                   key={pct}
                   type="button"
                   onClick={() => {
-                    // Get the width of the CKEditor editable element from the DOM
-                    const ckEditable = document.querySelector('.ck-email-editor-wrapper .ck-editor__editable');
-                    const editorWidth = Math.max(320, (ckEditable as HTMLElement | null)?.clientWidth || 800);
+                    const editorWidth = Math.max(320, editorEditableRef.current?.clientWidth || 800);
                     const width = Math.round((editorWidth * pct) / 100);
                     setInlineImages(
                       inlineImages.map((item, index) =>
@@ -1528,6 +1526,7 @@ export function OutlookEditor({
                 value={content}
                 onChange={updateContentAndInlineRefs}
                 editorInstanceRef={editorRef}
+                editableElementRef={editorEditableRef}
                 readOnly={actionsLocked}
                 onImageClick={setSelectedImageAssetId}
               />

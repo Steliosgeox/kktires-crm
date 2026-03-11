@@ -171,6 +171,7 @@ Behavior:
 - `framer-motion`
 - `recharts`
 - `@ckeditor/ckeditor5-react`
+- `ckeditor5`
 - `@xyflow/react`
 
 ### Validation/testing/tooling
@@ -240,6 +241,8 @@ C:\Users\Stelios\AppData\Local\nvm\v24.11.1\npm.cmd run lint
 C:\Users\Stelios\AppData\Local\nvm\v24.11.1\npm.cmd test -- --runInBand
 C:\Users\Stelios\AppData\Local\nvm\v24.11.1\npm.cmd run build
 ```
+
+Local development currently defaults to webpack via `npm run dev` because CKEditor/Turbopack compatibility is still under investigation. Use `npm run dev:turbo` only to reproduce or debug that issue.
 
 ## Files To Read First For Email Incidents
 
