@@ -182,6 +182,31 @@ export const customers = sqliteTable('customers', {
 }, (table) => ({
   orgIdx: index('customers_org_idx').on(table.orgId),
   emailIdx: index('customers_email_idx').on(table.email),
+  orgActiveIdx: index('idx_customers_org_active').on(table.orgId, table.isActive),
+  orgUnsubscribedIdx: index('idx_customers_org_unsubscribed')
+    .on(table.orgId, table.unsubscribed)
+    .where(sql`${table.unsubscribed} = 1`),
+  orgVipIdx: index('idx_customers_org_vip')
+    .on(table.orgId, table.isVip)
+    .where(sql`${table.isVip} = 1`),
+  locationIdx: index('idx_customers_location')
+    .on(table.orgId, table.latitude, table.longitude)
+    .where(sql`${table.latitude} IS NOT NULL AND ${table.longitude} IS NOT NULL`),
+  nameSearchIdx: index('idx_customers_name_search').on(
+    table.orgId,
+    table.firstName,
+    table.lastName
+  ),
+  companyFilterIdx: index('idx_customers_company')
+    .on(table.orgId, table.company)
+    .where(sql`${table.company} IS NOT NULL AND ${table.company} != ''`),
+  lifecycleIdx: index('idx_customers_lifecycle').on(table.orgId, table.lifecycleStage),
+  leadSourceIdx: index('idx_customers_lead_source')
+    .on(table.orgId, table.leadSource)
+    .where(sql`${table.leadSource} IS NOT NULL`),
+  followUpIdx: index('idx_customers_follow_up')
+    .on(table.orgId, table.nextFollowUpDate)
+    .where(sql`${table.nextFollowUpDate} IS NOT NULL`),
   orgEmailUidx: uniqueIndex('customers_org_email_uidx').on(
     table.orgId,
     sql`lower(trim(${table.email}))`
@@ -320,6 +345,12 @@ export const leads = sqliteTable('leads', {
   updatedAt: updatedAtColumn(),
 }, (table) => ({
   orgIdx: index('leads_org_idx').on(table.orgId),
+  assignedIdx: index('idx_leads_assigned')
+    .on(table.orgId, table.assignedTo)
+    .where(sql`${table.assignedTo} IS NOT NULL`),
+  conversionIdx: index('idx_leads_conversion')
+    .on(table.orgId, table.convertedToCustomerId)
+    .where(sql`${table.convertedToCustomerId} IS NOT NULL`),
   orgEmailUidx: uniqueIndex('leads_org_email_uidx').on(
     table.orgId,
     sql`lower(trim(${table.email}))`
@@ -513,6 +544,10 @@ export const emailJobs = sqliteTable('email_jobs', {
 }, (table) => ({
   statusRunIdx: index('email_jobs_status_run_idx').on(table.status, table.runAt),
   campaignIdx: index('email_jobs_campaign_idx').on(table.campaignId),
+  lockedIdx: index('idx_email_jobs_locked')
+    .on(table.lockedAt)
+    .where(sql`${table.lockedAt} IS NOT NULL`),
+  campaignStatusIdx: index('idx_email_jobs_campaign_status').on(table.campaignId, table.status),
 }));
 
 export const emailJobItems = sqliteTable('email_job_items', {
@@ -811,6 +846,15 @@ export const tasks = sqliteTable('tasks', {
   orgStatusIdx: index('tasks_org_status_idx').on(table.orgId, table.status),
   assignedIdx: index('tasks_assigned_idx').on(table.assignedTo),
   dueDateIdx: index('tasks_due_date_idx').on(table.dueDate),
+  overdueIdx: index('idx_tasks_overdue')
+    .on(table.orgId, table.dueDate, table.status)
+    .where(sql`${table.status} != 'done' AND ${table.dueDate} IS NOT NULL`),
+  userActiveIdx: index('idx_tasks_user_active')
+    .on(table.assignedTo, table.status)
+    .where(sql`${table.assignedTo} IS NOT NULL AND ${table.status} != 'done'`),
+  customerIdx: index('idx_tasks_customer')
+    .on(table.customerId)
+    .where(sql`${table.customerId} IS NOT NULL`),
 }));
 
 // ============================================

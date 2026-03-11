@@ -51,7 +51,9 @@ jobs:
           if-no-files-found: warn
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    # This action requires GitHub's Dependency Graph to be enabled for the repo.
+    # Keep it opt-in so PRs do not fail on repos where that setting is unavailable.
+    if: github.event_name == 'pull_request' && vars.ENABLE_DEPENDENCY_REVIEW == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
