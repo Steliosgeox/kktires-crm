@@ -526,3 +526,11 @@ function LeadsPageInner() {
     </div>
   );
 }
+
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={<div className="text-white/60 p-8">Φόρτωση leads...</div>}>
+      <LeadsPageInner />
+    </Suspense>
+  );
+}

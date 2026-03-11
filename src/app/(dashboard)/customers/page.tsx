@@ -1136,3 +1136,11 @@ function CustomersPageInner() {
     </div>
   );
 }
+
+export default function CustomersPage() {
+  return (
+    <Suspense fallback={<div className="text-white/60 p-8">Φόρτωση πελατών...</div>}>
+      <CustomersPageInner />
+    </Suspense>
+  );
+}

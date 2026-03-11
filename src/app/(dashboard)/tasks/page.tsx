@@ -555,3 +555,11 @@ function TasksPageInner() {
     </div>
   );
 }
+
+export default function TasksPage() {
+  return (
+    <Suspense fallback={<div className="text-white/60 p-8">Φόρτωση εργασιών...</div>}>
+      <TasksPageInner />
+    </Suspense>
+  );
+}

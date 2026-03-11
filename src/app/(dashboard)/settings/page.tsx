@@ -681,3 +681,10 @@ function SettingsPageInner() {
   );
 }
 
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="text-white/60 p-8">Φόρτωση ρυθμίσεων...</div>}>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}
