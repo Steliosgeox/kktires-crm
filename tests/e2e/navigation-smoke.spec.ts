@@ -11,6 +11,7 @@ function filterCriticalConsoleErrors(errors: string[]) {
 
 test('authenticated navigation across core dashboard pages stays healthy', async ({ page }) => {
   const errors: string[] = [];
+  const appMain = page.locator('main').first();
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') {
@@ -28,13 +29,13 @@ test('authenticated navigation across core dashboard pages stays healthy', async
 
   await page.goto('/');
   await page.waitForLoadState('networkidle');
-  await expect(page.locator('main')).toBeVisible();
+  await expect(appMain).toBeVisible();
 
   for (const route of routes) {
     await page.getByRole('link', { name: route.label, exact: true }).click();
     await page.waitForURL(`**${route.path}**`);
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('main')).toBeVisible();
+    await expect(appMain).toBeVisible();
     await expect(page).not.toHaveURL(/\/login/);
   }
 

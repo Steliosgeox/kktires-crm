@@ -70,12 +70,13 @@ test('lead conversion creates customer and marks lead as converted', async ({ pa
 
 test('campaign draft-save-schedule send flow works', async ({ page }) => {
   const seed = Date.now().toString();
+  const recipientEmail = `campaign-${seed}@example.com`;
   const createCampaignRes = await page.request.post('/api/campaigns', {
     data: {
       name: `Campaign-${seed}`,
       subject: `Subject-${seed}`,
       content: `<p>Body ${seed}</p>`,
-      recipientFilters: { cities: [] },
+      recipientFilters: { rawEmails: [recipientEmail] },
     },
   });
   expect(createCampaignRes.status()).toBe(201);
