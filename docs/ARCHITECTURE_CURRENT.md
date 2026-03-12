@@ -1,6 +1,6 @@
 # KK Tires CRM Architecture
 
-Last updated: 2026-03-10
+Last updated: 2026-03-12
 
 This document is the current working architecture map for the application. It is narrower and more up to date than the older large audit documents in `docs/ARCHITECTURAL_MAP.md` and `docs/app-audit.md`, which are still useful as historical reference but no longer reflect every recent email and schema hardening change.
 
@@ -83,6 +83,7 @@ Key files:
 
 - `src/app/(dashboard)/email/page.tsx`
 - `src/components/email/outlook-editor.tsx`
+- `src/components/email/outlook-editor/*`
 - `src/components/email/outlook-list.tsx`
 - `src/components/email/outlook-sidebar.tsx`
 - `src/components/email/outlook-recipient-drawer.tsx`
@@ -95,6 +96,9 @@ Current behavior:
 - Sent/sending/failed campaigns use stored delivery snapshots
 - Sent and sending campaigns are action-locked in the UI
 - Campaign duplication now clones the full campaign payload, not just name/subject
+- The page owns the canonical composer draft through `use-email-composer-draft`
+- The editor shell delegates UI state and command logic to `use-outlook-editor-ui` and `use-outlook-editor-controller`
+- Preview HTML rendering is isolated to `outlook-preview-pane.tsx`
 
 ### Email delivery pipeline
 

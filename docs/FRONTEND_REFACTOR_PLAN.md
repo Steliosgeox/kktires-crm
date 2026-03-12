@@ -1,6 +1,6 @@
 # Frontend Refactor Plan
 
-Last updated: 2026-03-10
+Last updated: 2026-03-12
 
 This plan is based on:
 
@@ -30,13 +30,19 @@ These are the first frontend changes to make.
 Files:
 
 - `src/components/email/outlook-editor.tsx`
+- `src/components/email/outlook-editor/*`
 - `src/app/(dashboard)/email/page.tsx`
 
 Why:
 
-- `outlook-editor.tsx` is very large and mixes recipient summary, scheduling, asset management, AI helpers, preview, inline image editing, signature selection, and send/save actions in one component.
+- the old `outlook-editor.tsx` monolith mixed recipient summary, scheduling, asset management, AI helpers, preview, inline image editing, signature selection, and send/save actions in one component
 - It now depends on a restored CKEditor integration, but parent-driven HTML mutation for inline images and editor orchestration is still complex and hard to validate.
 - It still uses `dangerouslySetInnerHTML` for preview rendering.
+
+Current status:
+
+- the live composer now uses a thin `outlook-editor.tsx` shell plus a dedicated feature folder for draft state, UI reducer, controller logic, preview rendering, toolbar, schedule panel, image inspector, and compose surface
+- future email-composer work should extend that feature folder instead of re-expanding the shell
 
 Concrete refactor:
 
