@@ -7,7 +7,7 @@
  * in the parent component (outlook-editor.tsx).
  */
 
-import { useEffect, useRef, type MutableRefObject } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { CKEditor } from '@ckeditor/ckeditor5-react';
 import {
   ClassicEditor,
@@ -106,6 +106,7 @@ export function CKEmailEditor({
 }: CKEmailEditorProps) {
   const localEditorRef = useRef<CKEditorInstance | null>(null);
   const onImageClickRef = useRef(onImageClick);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     onImageClickRef.current = onImageClick;
@@ -123,11 +124,33 @@ export function CKEmailEditor({
     editor.disableReadOnlyMode('ck-email-editor');
   }, [readOnly]);
 
+  if (loadError) {
+    return (
+      <div className={`ck-email-editor-wrapper${className ? ` ${className}` : ''}`}>
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          readOnly={readOnly}
+          placeholder={placeholder}
+          aria-label="Email body"
+          data-testid="fallback-email-editor"
+          className="min-h-[300px] w-full resize-y rounded-sm border p-3 outline-none"
+          style={{
+            background: 'var(--outlook-bg-panel)',
+            borderColor: 'var(--outlook-border)',
+            color: 'var(--outlook-text-primary)',
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`ck-email-editor-wrapper${className ? ` ${className}` : ''}`}>
       <CKEditor
         editor={ClassicEditor}
         config={{
+          licenseKey: 'GPL',
           plugins: EMAIL_EDITOR_PLUGINS as unknown as EditorConfig['plugins'],
           toolbar: {
             items: EMAIL_EDITOR_TOOLBAR_ITEMS as unknown as string[],
@@ -150,6 +173,7 @@ export function CKEmailEditor({
         }}
         data={value}
         onReady={(editor) => {
+          setLoadError(null);
           localEditorRef.current = editor;
           if (editorInstanceRef) {
             editorInstanceRef.current = editor;
@@ -179,6 +203,11 @@ export function CKEmailEditor({
         }}
         onError={(error, { phase }) => {
           console.error(`CKEditor error (${phase}):`, error);
+          setLoadError(
+            phase === 'initialization'
+              ? 'CKEditor failed to initialize'
+              : 'CKEditor encountered an error'
+          );
         }}
         onAfterDestroy={() => {
           localEditorRef.current = null;
