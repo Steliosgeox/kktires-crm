@@ -6,6 +6,7 @@ import { and, eq, lte, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ensureEmailTransportReady } from './transport';
 import { countRecipients, normalizeRecipientFilters } from './recipients';
+import { getConfiguredSmtpSenders, isKnownSmtpSender } from './senders';
 
 export type EmailJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
@@ -105,7 +106,27 @@ export async function enqueueCampaignSend(params: {
     };
   }
 
-  const transport = ensureEmailTransportReady();
+  if (campaign.fromEmail && !isKnownSmtpSender(campaign.fromEmail)) {
+    try {
+      getConfiguredSmtpSenders();
+    } catch {
+      return {
+        ok: false as const,
+        status: 503,
+        error: 'SMTP sender configuration is invalid',
+        code: 'SMTP_NOT_CONFIGURED' as const,
+      };
+    }
+
+    return {
+      ok: false as const,
+      status: 400,
+      error: 'Selected campaign sender is not configured',
+      code: 'BAD_REQUEST' as const,
+    };
+  }
+
+  const transport = ensureEmailTransportReady(campaign.fromEmail || undefined);
   if (!transport.ok) {
     return {
       ok: false as const,

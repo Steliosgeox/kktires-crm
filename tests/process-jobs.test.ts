@@ -36,7 +36,8 @@ async function seedCampaignAndJob(
     categories: string[];
     customerIds: string[];
     rawEmails: string[];
-  }> = {}
+  }> = {},
+  options?: { fromEmail?: string | null }
 ) {
   const now = new Date();
   await db.insert(schema.emailCampaigns).values({
@@ -44,6 +45,7 @@ async function seedCampaignAndJob(
     orgId: ORG_ID,
     name: `Campaign ${campaignId}`,
     subject: 'Subject',
+    fromEmail: options?.fromEmail ?? null,
     content: '<p>Hello {{firstName}}</p>',
     status: 'draft',
     recipientFilters: {
@@ -294,6 +296,36 @@ describe('processDueEmailJobs', () => {
     expect(campaign?.sentCount).toBe(2);
     expect(campaign?.totalRecipients).toBe(2);
     expect(job?.status).toBe('completed');
+  });
+
+  it('uses the campaign sender when dispatching email jobs', async () => {
+    await seedCustomer('cust_sender_1', 'sender-one@example.com', 'Sender One');
+    await seedCampaignAndJob(
+      'camp_sender_identity',
+      {
+        customerIds: ['cust_sender_1'],
+      },
+      { fromEmail: 'info@kctparts.gr' }
+    );
+
+    mockSendEmail.mockResolvedValue({
+      ok: true,
+      provider: 'smtp',
+      messageId: '<sender-identity@example.com>',
+    });
+
+    await processJobsModule.processDueEmailJobs({
+      workerId: 'worker-test',
+      timeBudgetMs: 10_000,
+      maxJobs: 1,
+    });
+
+    expect(mockEnsureEmailTransportReady).toHaveBeenCalledWith('info@kctparts.gr');
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        smtpSenderEmail: 'info@kctparts.gr',
+      })
+    );
   });
 
   it('resets stale processing job-items and resumes delivery', async () => {

@@ -13,6 +13,7 @@ export type EmailSendParams = {
   text?: string;
   headers?: Record<string, string>;
   from?: string;
+  smtpSenderEmail?: string;
   attachments?: Array<{
     filename: string;
     content: Buffer | Uint8Array;
@@ -55,8 +56,8 @@ function formatMissingEnv(missing: string[]): string {
   return ` Missing: ${missing.join(', ')}.`;
 }
 
-export function ensureEmailTransportReady(): EmailTransportReadiness {
-  const readiness = getSmtpReadiness();
+export function ensureEmailTransportReady(senderEmail?: string): EmailTransportReadiness {
+  const readiness = getSmtpReadiness(senderEmail);
   if (!readiness.configured) {
     return {
       ok: false,
@@ -71,7 +72,7 @@ export function ensureEmailTransportReady(): EmailTransportReadiness {
 }
 
 export async function sendEmail(params: EmailSendParams): Promise<EmailSendResult> {
-  const readiness = ensureEmailTransportReady();
+  const readiness = ensureEmailTransportReady(params.smtpSenderEmail);
   if (!readiness.ok) {
     return {
       ok: false,
@@ -81,7 +82,10 @@ export async function sendEmail(params: EmailSendParams): Promise<EmailSendResul
     };
   }
 
-  const result = await sendSmtpEmailDetailed(params);
+  const result = await sendSmtpEmailDetailed({
+    ...params,
+    senderEmail: params.smtpSenderEmail,
+  });
   if (result.ok) {
     return {
       ok: true,

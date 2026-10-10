@@ -11,6 +11,7 @@ import {
   syncCampaignAssets,
 } from '@/server/email/assets';
 import {
+  ApiError,
   createRequestId,
   handleApiError,
   jsonError,
@@ -24,6 +25,7 @@ import {
   isSchemaError,
   rawUpdateCampaign,
 } from '@/server/db/auto-heal';
+import { findSmtpSenderByEmail, getConfiguredSmtpSenders } from '@/server/email/senders';
 
 const campaignStatusSchema = z.enum([
   'draft',
@@ -49,6 +51,7 @@ const campaignUpdateSchema = z.object({
   subject: z.string().trim().max(300).optional(),
   content: z.string().max(1_000_000).optional(),
   status: campaignStatusSchema.optional(),
+  fromEmail: z.string().trim().email().max(254).optional().nullable(),
   scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: recipientFiltersSchema.optional(),
   signatureId: z.string().trim().max(64).optional().nullable(),
@@ -122,6 +125,20 @@ export async function PUT(
     }
 
     const body = await withValidatedBody(request, campaignUpdateSchema, { maxBytes: 1_500_000 });
+    const selectedSender =
+      body.fromEmail != null
+        ? findSmtpSenderByEmail(body.fromEmail)
+        : null;
+
+    if (body.fromEmail && !selectedSender) {
+      try {
+        getConfiguredSmtpSenders();
+      } catch {
+        throw new ApiError('SMTP sender configuration is invalid', 503, 'SMTP_NOT_CONFIGURED');
+      }
+
+      throw new ApiError('Selected sender is not configured', 400, 'BAD_REQUEST');
+    }
 
     if (existingCampaign.status === 'sent' || existingCampaign.status === 'sending') {
       return jsonError(
@@ -181,6 +198,7 @@ export async function PUT(
       }
     }
     if (body.status !== undefined) setValues.status = body.status;
+    if (body.fromEmail !== undefined) setValues.fromEmail = selectedSender?.fromEmail ?? null;
     if (body.scheduledAt !== undefined) setValues.scheduledAt = scheduledAtDate;
     if (recipientFilters !== undefined) {
       setValues.recipientFilters = recipientFilters;

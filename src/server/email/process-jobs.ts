@@ -309,7 +309,7 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
     return { ok: true as const, sent: 0, failed: 0, processed: 0, done: true };
   }
 
-  const readiness = ensureEmailTransportReady();
+  const readiness = ensureEmailTransportReady(campaign.fromEmail || undefined);
   if (!readiness.ok) {
     await markEmailJobFailed(job.id, readiness.errorMessage);
     await db
@@ -460,7 +460,7 @@ async function processOneJob(job: EmailJobRow, params: { timeBudgetMs: number })
               subject,
               html: content,
               headers,
-              from: campaign.fromEmail || undefined,
+              smtpSenderEmail: campaign.fromEmail || undefined,
               attachments,
             });
 

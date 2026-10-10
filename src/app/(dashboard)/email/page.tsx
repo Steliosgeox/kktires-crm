@@ -46,6 +46,8 @@ export default function EmailPage() {
     usesDeliverySnapshot,
     templates,
     signatures,
+    senders,
+    primaryFromEmail,
     callbacks,
     workflow,
   } = useEmailPageController();
@@ -113,7 +115,7 @@ export default function EmailPage() {
               isNew: workflow.isNew,
               recipientCount,
             }}
-            catalog={{ templates, signatures }}
+            catalog={{ templates, signatures, senders, primaryFromEmail }}
             callbacks={{
               onSave: callbacks.handleSave,
               onSchedule: callbacks.handleSchedule,

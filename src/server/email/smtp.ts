@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
+import { findSmtpSenderByEmail, getPrimarySmtpSender } from './senders';
 
 export type SmtpConfig = {
+  id: string;
   host: string;
   port: number;
   secure: boolean;
@@ -18,35 +20,68 @@ export type SmtpReadiness = {
   from: string | null;
 };
 
-function parseSmtpConfig(): SmtpConfig | null {
-  const host = process.env.SMTP_HOST?.trim();
-  const portRaw = process.env.SMTP_PORT?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
+function parsePrimarySmtpConfig(): SmtpConfig | null {
+  const primary = getPrimarySmtpSender();
+  if (!primary) return null;
 
-  if (!host || !portRaw || !user || !pass) return null;
+  return {
+    id: primary.id,
+    host: primary.host,
+    port: primary.port,
+    secure: primary.secure,
+    user: primary.user,
+    pass: primary.pass,
+    from: primary.fromEmail,
+  };
+}
 
-  const port = Number.parseInt(portRaw, 10);
-  if (!Number.isFinite(port) || port <= 0) return null;
+function parseSmtpConfig(senderEmail?: string): SmtpConfig | null {
+  if (!senderEmail) {
+    return parsePrimarySmtpConfig();
+  }
 
-  const secureRaw = (process.env.SMTP_SECURE || '').trim().toLowerCase();
-  const secure =
-    secureRaw === 'true' ||
-    secureRaw === '1' ||
-    // Common defaults: 465 = implicit TLS
-    port === 465;
+  const sender = findSmtpSenderByEmail(senderEmail);
+  if (!sender) return null;
 
-  const from = (process.env.SMTP_FROM || user).trim();
-  if (!from) return null;
-
-  return { host, port, secure, user, pass, from };
+  return {
+    id: sender.id,
+    host: sender.host,
+    port: sender.port,
+    secure: sender.secure,
+    user: sender.user,
+    pass: sender.pass,
+    from: sender.fromEmail,
+  };
 }
 
 export function isSmtpConfigured(): boolean {
   return !!parseSmtpConfig();
 }
 
-export function getSmtpReadiness(): SmtpReadiness {
+export function getSmtpReadiness(senderEmail?: string): SmtpReadiness {
+  const cfg = parseSmtpConfig(senderEmail);
+  if (cfg) {
+    return {
+      configured: true,
+      missing: [],
+      host: cfg.host,
+      port: cfg.port,
+      secure: cfg.secure,
+      from: cfg.from,
+    };
+  }
+
+  if (senderEmail) {
+    return {
+      configured: false,
+      missing: [`SMTP sender "${senderEmail}"`],
+      host: null,
+      port: null,
+      secure: null,
+      from: senderEmail,
+    };
+  }
+
   const host = process.env.SMTP_HOST?.trim() || null;
   const portRaw = process.env.SMTP_PORT?.trim() || null;
   const user = process.env.SMTP_USER?.trim() || null;
@@ -88,17 +123,20 @@ export function getSmtpReadiness(): SmtpReadiness {
 // Avoid depending on nodemailer type declarations during builds (some CI setups omit devDependencies).
 // Runtime is still nodemailer; this is only about TS types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let transport: any = null;
+const transportCache = new Map<string, any>();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getTransport(): any {
-  if (transport) return transport;
-  const cfg = parseSmtpConfig();
+function getTransport(senderEmail?: string): any {
+  const cfg = parseSmtpConfig(senderEmail);
   if (!cfg) {
     throw new Error('SMTP is not configured (missing SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS)');
   }
 
-  transport = nodemailer.createTransport({
+  const cacheKey = cfg.id;
+  const existing = transportCache.get(cacheKey);
+  if (existing) return existing;
+
+  const transport = nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
     secure: cfg.secure,
@@ -110,10 +148,11 @@ function getTransport(): any {
     // Without these, a stalled SMTP server can hold the Vercel function open until
     // the platform hard-kills it (60 s), leaving the email job locked for 15 min.
     connectionTimeout: 10_000, // 10 s to establish TCP connection
-    greetingTimeout: 5_000,   // 5 s for the SMTP greeting banner
-    socketTimeout: 30_000,    // 30 s idle per socket operation
+    greetingTimeout: 5_000, // 5 s for the SMTP greeting banner
+    socketTimeout: 30_000, // 30 s idle per socket operation
   });
 
+  transportCache.set(cacheKey, transport);
   return transport;
 }
 
@@ -140,6 +179,7 @@ export async function sendSmtpEmailDetailed(params: {
   text?: string;
   headers?: Record<string, string>;
   from?: string;
+  senderEmail?: string;
   attachments?: Array<{
     filename: string;
     content: Buffer | Uint8Array;
@@ -148,9 +188,9 @@ export async function sendSmtpEmailDetailed(params: {
     disposition?: 'inline' | 'attachment';
   }>;
 }): Promise<SmtpSendResult> {
-  const cfg = parseSmtpConfig();
+  const cfg = parseSmtpConfig(params.senderEmail);
   if (!cfg) {
-    const readiness = getSmtpReadiness();
+    const readiness = getSmtpReadiness(params.senderEmail);
     const details = readiness.missing.length > 0 ? ` Missing: ${readiness.missing.join(', ')}.` : '';
     return {
       ok: false,
@@ -161,7 +201,7 @@ export async function sendSmtpEmailDetailed(params: {
   }
 
   try {
-    const info = await getTransport().sendMail({
+    const info = await getTransport(params.senderEmail).sendMail({
       from: params.from || cfg.from,
       to: params.to,
       subject: params.subject,
@@ -172,10 +212,8 @@ export async function sendSmtpEmailDetailed(params: {
     });
     return { ok: true, provider: 'smtp', messageId: info?.messageId };
   } catch (error) {
-    // Reset the singleton so the next caller gets a fresh transport.
-    // A stale/broken transport (e.g. after a connection reset or auth error)
-    // would cause all subsequent sends to fail until a cold start.
-    transport = null;
+    // Reset the cached transport for this sender so the next caller gets a fresh connection.
+    transportCache.delete(cfg.id);
     const message = formatSendError(error);
     console.error('SMTP send error:', error);
     return {
@@ -194,6 +232,7 @@ export async function sendSmtpEmail(params: {
   text?: string;
   headers?: Record<string, string>;
   from?: string;
+  senderEmail?: string;
   attachments?: Array<{
     filename: string;
     content: Buffer | Uint8Array;

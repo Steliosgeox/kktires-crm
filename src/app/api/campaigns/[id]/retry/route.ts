@@ -36,9 +36,9 @@ export async function POST(
         }
 
         // Check SMTP readiness
-        const transport = ensureEmailTransportReady();
+        const transport = ensureEmailTransportReady(campaign.fromEmail || undefined);
         if (!transport.ok) {
-            return jsonError(transport.errorMessage, 503, 'INTERNAL_ERROR', requestId);
+            return jsonError(transport.errorMessage, 503, 'SMTP_NOT_CONFIGURED', requestId);
         }
 
         // Find failed recipients

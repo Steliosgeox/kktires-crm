@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { emailCampaigns, emailSignatures, organizations } from '@/lib/db/schema';
 import {
+  ApiError,
   createRequestId,
   handleApiError,
   jsonError,
@@ -25,6 +26,7 @@ import {
   isSchemaError,
   rawInsertCampaign,
 } from '@/server/db/auto-heal';
+import { findSmtpSenderByEmail, getConfiguredSmtpSenders } from '@/server/email/senders';
 
 const campaignStatusSchema = z.enum([
   'draft',
@@ -50,6 +52,7 @@ const campaignCreateSchema = z.object({
   subject: z.string().trim().max(300).optional(),
   content: z.string().max(1_000_000).optional(),
   status: campaignStatusSchema.optional(),
+  fromEmail: z.string().trim().email().max(254).optional().nullable(),
   scheduledAt: z.string().datetime().optional().nullable(),
   recipientFilters: recipientFiltersSchema.optional(),
   signatureId: z.string().trim().max(64).optional().nullable(),
@@ -136,6 +139,7 @@ export async function GET(request: NextRequest) {
           id: emailCampaigns.id,
           name: emailCampaigns.name,
           subject: emailCampaigns.subject,
+          fromEmail: emailCampaigns.fromEmail,
           status: emailCampaigns.status,
           scheduledAt: emailCampaigns.scheduledAt,
           sentAt: emailCampaigns.sentAt,
@@ -207,6 +211,21 @@ export async function POST(request: NextRequest) {
 
     const body = await withValidatedBody(request, campaignCreateSchema, { maxBytes: 1_500_000 });
     const recipientFilters = normalizeRecipientFilters(body.recipientFilters);
+    const selectedSender =
+      body.fromEmail != null
+        ? findSmtpSenderByEmail(body.fromEmail)
+        : null;
+
+    if (body.fromEmail && !selectedSender) {
+      try {
+        getConfiguredSmtpSenders();
+      } catch {
+        throw new ApiError('SMTP sender configuration is invalid', 503, 'SMTP_NOT_CONFIGURED');
+      }
+
+      throw new ApiError('Selected sender is not configured', 400, 'BAD_REQUEST');
+    }
+
     let totalRecipients = 0;
     try {
       totalRecipients = await countRecipients(orgId, recipientFilters);
@@ -273,6 +292,7 @@ export async function POST(request: NextRequest) {
       subject: body.subject || body.name,
       content,
       status: body.status || 'draft',
+      fromEmail: selectedSender?.fromEmail ?? null,
       scheduledAt: scheduledAtDate,
       totalRecipients,
       recipientFilters,

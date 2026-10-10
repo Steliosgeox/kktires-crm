@@ -23,6 +23,13 @@ export interface Signature {
   isDefault: boolean;
 }
 
+export interface CampaignSenderOption {
+  id: string;
+  label: string;
+  fromEmail: string;
+  isPrimary: boolean;
+}
+
 export interface CampaignAttachment {
   assetId: string;
   fileName: string;
@@ -43,6 +50,7 @@ export interface InlineImageConfig {
 export interface EmailComposerDraft {
   campaignName: string;
   subject: string;
+  fromEmail: string | null;
   content: string;
   recipientFilters: RecipientFilters;
   attachments: CampaignAttachment[];
@@ -55,6 +63,7 @@ export type DraftSetter<T> = Dispatch<SetStateAction<T>>;
 export interface EmailComposerDraftActions {
   setCampaignName: DraftSetter<string>;
   setSubject: DraftSetter<string>;
+  setFromEmail: DraftSetter<string | null>;
   setContent: DraftSetter<string>;
   setRecipientFilters: DraftSetter<RecipientFilters>;
   setAttachments: DraftSetter<CampaignAttachment[]>;
@@ -68,6 +77,8 @@ export interface EmailComposerDraftActions {
 export interface EmailComposerCatalog {
   templates: Template[];
   signatures: Signature[];
+  senders: CampaignSenderOption[];
+  primaryFromEmail: string | null;
 }
 
 export interface OutlookEditorWorkflow {
@@ -77,6 +88,8 @@ export interface OutlookEditorWorkflow {
   sending: boolean;
   isNew: boolean;
   recipientCount?: number;
+  requiresSenderSelection?: boolean;
+  hasSelectedSender?: boolean;
 }
 
 export interface OutlookEditorCallbacks {

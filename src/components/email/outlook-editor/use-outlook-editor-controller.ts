@@ -66,9 +66,21 @@ export function useOutlookEditorController({
   const isSentCampaign = workflow.campaignStatus === 'sent';
   const isSendingCampaign = workflow.campaignStatus === 'sending';
   const actionsLocked = isSentCampaign || isSendingCampaign;
+  const senderRequired = !!workflow.requiresSenderSelection;
+  const hasSelectedSender = !!workflow.hasSelectedSender;
   const saveDisabled = workflow.saving || workflow.sending || actionsLocked;
-  const sendDisabled = workflow.saving || workflow.sending || !hasRecipients || actionsLocked;
-  const scheduleDisabled = workflow.saving || workflow.sending || !hasRecipients || actionsLocked;
+  const sendDisabled =
+    workflow.saving ||
+    workflow.sending ||
+    !hasRecipients ||
+    actionsLocked ||
+    (senderRequired && !hasSelectedSender);
+  const scheduleDisabled =
+    workflow.saving ||
+    workflow.sending ||
+    !hasRecipients ||
+    actionsLocked ||
+    (senderRequired && !hasSelectedSender);
 
   const selectedImageConfig = uiState.selectedImageAssetId
     ? draft.inlineImages.find((image) => image.assetId === uiState.selectedImageAssetId) ?? null

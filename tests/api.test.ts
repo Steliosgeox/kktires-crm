@@ -751,6 +751,152 @@ describe('API routes (DB-backed)', () => {
     expect(unauthRes.status).toBe(401);
   }, 15_000);
 
+  it('email sender config route exposes safe senders and campaign routes validate fromEmail', async () => {
+    const prevEnv = {
+      SMTP_HOST: process.env.SMTP_HOST,
+      SMTP_PORT: process.env.SMTP_PORT,
+      SMTP_SECURE: process.env.SMTP_SECURE,
+      SMTP_USER: process.env.SMTP_USER,
+      SMTP_PASS: process.env.SMTP_PASS,
+      SMTP_FROM: process.env.SMTP_FROM,
+      SMTP_SENDERS_JSON: process.env.SMTP_SENDERS_JSON,
+    };
+
+    process.env.SMTP_HOST = 'mail.primary.gr';
+    process.env.SMTP_PORT = '587';
+    process.env.SMTP_SECURE = 'false';
+    process.env.SMTP_USER = 'info@kktires.gr';
+    process.env.SMTP_PASS = 'primary-secret';
+    process.env.SMTP_FROM = 'info@kktires.gr';
+    process.env.SMTP_SENDERS_JSON = JSON.stringify([
+      {
+        id: 'kctparts',
+        label: 'KC T Parts',
+        fromEmail: 'info@kctparts.gr',
+        host: 'mail.parts.gr',
+        port: 587,
+        secure: false,
+        user: 'info@kctparts.gr',
+        pass: 'parts-secret',
+      },
+    ]);
+
+    try {
+      const sendersRoute = await import('../src/app/api/email/senders/route');
+      const campaignsRoute = await import('../src/app/api/campaigns/route');
+      const campaignByIdRoute = await import('../src/app/api/campaigns/[id]/route');
+
+      const sendersRes = await sendersRoute.GET();
+      expect(sendersRes.status).toBe(200);
+      const sendersPayload = await sendersRes.json();
+      expect(sendersPayload.primaryFromEmail).toBe('info@kktires.gr');
+      expect(sendersPayload.senders).toEqual([
+        {
+          id: 'primary',
+          label: 'Primary SMTP',
+          fromEmail: 'info@kktires.gr',
+          isPrimary: true,
+        },
+        {
+          id: 'kctparts',
+          label: 'KC T Parts',
+          fromEmail: 'info@kctparts.gr',
+          isPrimary: false,
+        },
+      ]);
+
+      const createRes = await campaignsRoute.POST(
+        jsonRequest('http://localhost/api/campaigns', 'POST', {
+          name: 'Sender Campaign',
+          subject: 'Sender Subject',
+          fromEmail: 'info@kctparts.gr',
+          content: '<p>Hello</p>',
+          recipientFilters: { cities: ['Athens'] },
+        }) as any
+      );
+      expect(createRes.status).toBe(201);
+      const created = await createRes.json();
+      expect(created.fromEmail).toBe('info@kctparts.gr');
+
+      const updateRes = await campaignByIdRoute.PUT(
+        jsonRequest(`http://localhost/api/campaigns/${created.id}`, 'PUT', {
+          fromEmail: 'info@kktires.gr',
+        }) as any,
+        idParams(created.id) as any
+      );
+      expect(updateRes.status).toBe(200);
+      const updated = await updateRes.json();
+      expect(updated.fromEmail).toBe('info@kktires.gr');
+
+      const invalidRes = await campaignsRoute.POST(
+        jsonRequest('http://localhost/api/campaigns', 'POST', {
+          name: 'Invalid Sender Campaign',
+          subject: 'Sender Subject',
+          fromEmail: 'info@unknown.gr',
+          content: '<p>Hello</p>',
+          recipientFilters: { cities: ['Athens'] },
+        }) as any
+      );
+      expect(invalidRes.status).toBe(400);
+      const invalidPayload = await invalidRes.json();
+      expect(invalidPayload.code).toBe('BAD_REQUEST');
+    } finally {
+      process.env.SMTP_HOST = prevEnv.SMTP_HOST;
+      process.env.SMTP_PORT = prevEnv.SMTP_PORT;
+      process.env.SMTP_SECURE = prevEnv.SMTP_SECURE;
+      process.env.SMTP_USER = prevEnv.SMTP_USER;
+      process.env.SMTP_PASS = prevEnv.SMTP_PASS;
+      process.env.SMTP_FROM = prevEnv.SMTP_FROM;
+      process.env.SMTP_SENDERS_JSON = prevEnv.SMTP_SENDERS_JSON;
+    }
+  });
+
+  it('campaign routes surface malformed SMTP sender config as a server error', async () => {
+    const prevEnv = {
+      SMTP_HOST: process.env.SMTP_HOST,
+      SMTP_PORT: process.env.SMTP_PORT,
+      SMTP_SECURE: process.env.SMTP_SECURE,
+      SMTP_USER: process.env.SMTP_USER,
+      SMTP_PASS: process.env.SMTP_PASS,
+      SMTP_FROM: process.env.SMTP_FROM,
+      SMTP_SENDERS_JSON: process.env.SMTP_SENDERS_JSON,
+    };
+
+    process.env.SMTP_HOST = 'mail.primary.gr';
+    process.env.SMTP_PORT = '587';
+    process.env.SMTP_SECURE = 'false';
+    process.env.SMTP_USER = 'info@kktires.gr';
+    process.env.SMTP_PASS = 'primary-secret';
+    process.env.SMTP_FROM = 'info@kktires.gr';
+    process.env.SMTP_SENDERS_JSON = '{"broken":true';
+
+    try {
+      const campaignsRoute = await import('../src/app/api/campaigns/route');
+
+      const createRes = await campaignsRoute.POST(
+        jsonRequest('http://localhost/api/campaigns', 'POST', {
+          name: 'Broken Sender Config Campaign',
+          subject: 'Broken Sender Config Campaign',
+          fromEmail: 'info@kctparts.gr',
+          content: '<p>Hello</p>',
+          recipientFilters: { cities: ['Athens'] },
+        }) as any
+      );
+
+      expect(createRes.status).toBe(503);
+      const createPayload = await createRes.json();
+      expect(createPayload.code).toBe('SMTP_NOT_CONFIGURED');
+    } finally {
+      process.env.SMTP_HOST = prevEnv.SMTP_HOST;
+      process.env.SMTP_PORT = prevEnv.SMTP_PORT;
+      process.env.SMTP_SECURE = prevEnv.SMTP_SECURE;
+      process.env.SMTP_USER = prevEnv.SMTP_USER;
+      process.env.SMTP_PASS = prevEnv.SMTP_PASS;
+      process.env.SMTP_FROM = prevEnv.SMTP_FROM;
+      process.env.SMTP_SENDERS_JSON = prevEnv.SMTP_SENDERS_JSON;
+    }
+  });
+
   it('campaign update route blocks edits once sending has started', async () => {
     const campaignByIdRoute = await import('../src/app/api/campaigns/[id]/route');
     const campaignId = `camp_locked_${Date.now()}`;

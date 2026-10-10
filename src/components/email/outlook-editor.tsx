@@ -68,6 +68,9 @@ export function OutlookEditor({
             campaignId={workflow.campaignId}
             campaignName={draft.campaignName}
             subject={draft.subject}
+            fromEmail={draft.fromEmail}
+            availableSenders={catalog.senders}
+            primaryFromEmail={catalog.primaryFromEmail}
             recipientFilters={draft.recipientFilters}
             campaignStatus={workflow.campaignStatus}
             isNew={workflow.isNew}
@@ -82,6 +85,7 @@ export function OutlookEditor({
             content={draft.content}
             onCampaignNameChange={draftActions.setCampaignName}
             onSubjectChange={draftActions.setSubject}
+            onFromEmailChange={draftActions.setFromEmail}
             onRecipientFiltersChange={draftActions.setRecipientFilters}
             onCancel={callbacks.onCancel}
             onSave={callbacks.onSave}

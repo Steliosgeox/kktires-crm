@@ -11,6 +11,7 @@ export type ApiErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'PAYLOAD_TOO_LARGE'
+  | 'SMTP_NOT_CONFIGURED'
   | 'INTERNAL_ERROR';
 
 export class ApiError extends Error {

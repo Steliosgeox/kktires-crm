@@ -2,7 +2,7 @@
 
 import { OutlookEditorActionsBar } from './outlook-editor-actions-bar';
 import { OutlookRecipientsSummary } from './outlook-recipients-summary';
-import type { EmailComposerDraftActions } from './types';
+import type { CampaignSenderOption, EmailComposerDraftActions } from './types';
 
 import type { RecipientFilters } from '@/lib/email/recipient-filters';
 import { messagesEl } from '@/lib/i18n/ui/messages-el';
@@ -11,6 +11,9 @@ type OutlookEditorHeaderProps = {
   campaignId?: string | null;
   campaignName: string;
   subject: string;
+  fromEmail: string | null;
+  availableSenders: CampaignSenderOption[];
+  primaryFromEmail: string | null;
   recipientFilters: RecipientFilters;
   campaignStatus?: string | null;
   isNew: boolean;
@@ -25,6 +28,7 @@ type OutlookEditorHeaderProps = {
   content: string;
   onCampaignNameChange: EmailComposerDraftActions['setCampaignName'];
   onSubjectChange: EmailComposerDraftActions['setSubject'];
+  onFromEmailChange: EmailComposerDraftActions['setFromEmail'];
   onRecipientFiltersChange: EmailComposerDraftActions['setRecipientFilters'];
   onCancel: () => void;
   onSave: (sendNow: boolean) => void;
@@ -38,6 +42,9 @@ export function OutlookEditorHeader({
   campaignId,
   campaignName,
   subject,
+  fromEmail,
+  availableSenders,
+  primaryFromEmail,
   recipientFilters,
   campaignStatus,
   isNew,
@@ -52,6 +59,7 @@ export function OutlookEditorHeader({
   content,
   onCampaignNameChange,
   onSubjectChange,
+  onFromEmailChange,
   onRecipientFiltersChange,
   onCancel,
   onSave,
@@ -60,6 +68,11 @@ export function OutlookEditorHeader({
   onOpenRecipientsDrawer,
   onSuggestSubject,
 }: OutlookEditorHeaderProps) {
+  const hasMultipleSenders = availableSenders.length > 1;
+  const legacyPrimaryValue =
+    !isNew && !fromEmail && hasMultipleSenders && primaryFromEmail ? '__legacy_primary__' : '';
+  const senderValue = fromEmail ?? legacyPrimaryValue;
+
   return (
     <>
       <OutlookEditorActionsBar
@@ -149,6 +162,69 @@ export function OutlookEditorHeader({
           </button>
         </div>
       </div>
+
+      {availableSenders.length > 0 && (
+        <div
+          className="px-4 py-3 border-b"
+          style={{ borderColor: 'var(--outlook-border)' }}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className="text-sm font-medium w-20"
+              style={{ color: 'var(--outlook-text-secondary)' }}
+            >
+              Από:
+            </span>
+            {hasMultipleSenders ? (
+              <select
+                data-testid="sender-select"
+                value={senderValue}
+                onChange={(event) =>
+                  onFromEmailChange(
+                    event.target.value && event.target.value !== '__legacy_primary__'
+                      ? event.target.value
+                      : null
+                  )
+                }
+                disabled={actionsLocked}
+                className="flex-1 text-sm rounded-md px-3 py-2"
+                style={{
+                  background: 'var(--outlook-bg-surface)',
+                  border: '1px solid var(--outlook-border)',
+                  color: 'var(--outlook-text-primary)',
+                }}
+              >
+                {!legacyPrimaryValue && (
+                  <option value="">
+                    {isNew ? 'Επιλέξτε αποστολέα...' : 'Χρήση primary sender'}
+                  </option>
+                )}
+                {legacyPrimaryValue && primaryFromEmail && (
+                  <option value="__legacy_primary__">
+                    Primary sender (legacy): {primaryFromEmail}
+                  </option>
+                )}
+                {availableSenders.map((sender) => (
+                  <option key={sender.id} value={sender.fromEmail}>
+                    {sender.label} ({sender.fromEmail}){sender.isPrimary ? ' - Primary' : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div
+                className="flex-1 text-sm rounded-md px-3 py-2"
+                style={{
+                  background: 'var(--outlook-bg-surface)',
+                  border: '1px solid var(--outlook-border)',
+                  color: 'var(--outlook-text-primary)',
+                }}
+              >
+                {availableSenders[0].label} ({availableSenders[0].fromEmail})
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

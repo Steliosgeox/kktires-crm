@@ -10,6 +10,15 @@ import * as schema from '../src/lib/db/schema';
 
 const ORG_ID = 'org_job_queue';
 const USER_ID = 'user_job_queue';
+const ORIGINAL_SMTP_ENV = {
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_SECURE: process.env.SMTP_SECURE,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASS: process.env.SMTP_PASS,
+  SMTP_FROM: process.env.SMTP_FROM,
+  SMTP_SENDERS_JSON: process.env.SMTP_SENDERS_JSON,
+};
 
 const { mockEnsureEmailTransportReady } = vi.hoisted(() => ({
   mockEnsureEmailTransportReady: vi.fn(),
@@ -33,7 +42,8 @@ async function seedCampaign(
     categories?: string[];
     customerIds?: string[];
     rawEmails?: string[];
-  }
+  },
+  options?: { fromEmail?: string | null }
 ) {
   const now = new Date();
   await db.insert(schema.emailCampaigns).values({
@@ -42,6 +52,7 @@ async function seedCampaign(
     name: `Campaign ${campaignId}`,
     subject: 'Subject',
     content: '<p>Hello</p>',
+    fromEmail: options?.fromEmail ?? null,
     status: 'draft',
     recipientFilters: {
       cities: recipientFilters.cities || [],
@@ -130,6 +141,13 @@ describe('enqueueCampaignSend', () => {
   });
 
   afterAll(async () => {
+    process.env.SMTP_HOST = ORIGINAL_SMTP_ENV.SMTP_HOST;
+    process.env.SMTP_PORT = ORIGINAL_SMTP_ENV.SMTP_PORT;
+    process.env.SMTP_SECURE = ORIGINAL_SMTP_ENV.SMTP_SECURE;
+    process.env.SMTP_USER = ORIGINAL_SMTP_ENV.SMTP_USER;
+    process.env.SMTP_PASS = ORIGINAL_SMTP_ENV.SMTP_PASS;
+    process.env.SMTP_FROM = ORIGINAL_SMTP_ENV.SMTP_FROM;
+    process.env.SMTP_SENDERS_JSON = ORIGINAL_SMTP_ENV.SMTP_SENDERS_JSON;
     try {
       await client?.close?.();
     } catch {
@@ -199,5 +217,92 @@ describe('enqueueCampaignSend', () => {
     expect(job?.id).toBe(result.jobId);
     expect(job?.status).toBe('queued');
     expect(campaign?.status).toBe('sending');
+  });
+
+  it('validates and checks readiness against the configured campaign sender', async () => {
+    process.env.SMTP_HOST = 'mail.primary.gr';
+    process.env.SMTP_PORT = '587';
+    process.env.SMTP_SECURE = 'false';
+    process.env.SMTP_USER = 'info@kktires.gr';
+    process.env.SMTP_PASS = 'primary-secret';
+    process.env.SMTP_FROM = 'info@kktires.gr';
+    process.env.SMTP_SENDERS_JSON = JSON.stringify([
+      {
+        id: 'kctparts',
+        label: 'KC T Parts',
+        fromEmail: 'info@kctparts.gr',
+        host: 'mail.parts.gr',
+        port: 587,
+        secure: false,
+        user: 'info@kctparts.gr',
+        pass: 'parts-secret',
+      },
+    ]);
+
+    await seedCustomer('cust_sender', { email: 'sender@example.com', firstName: 'Sender' });
+    await seedCampaign(
+      'camp_sender_ready',
+      {
+        customerIds: ['cust_sender'],
+      },
+      { fromEmail: 'info@kctparts.gr' }
+    );
+
+    const result = await jobQueueModule.enqueueCampaignSend({
+      orgId: ORG_ID,
+      campaignId: 'camp_sender_ready',
+      senderUserId: USER_ID,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockEnsureEmailTransportReady).toHaveBeenCalledWith('info@kctparts.gr');
+
+    await seedCampaign(
+      'camp_sender_invalid',
+      {
+        customerIds: ['cust_sender'],
+      },
+      { fromEmail: 'info@unknown.gr' }
+    );
+
+    const invalid = await jobQueueModule.enqueueCampaignSend({
+      orgId: ORG_ID,
+      campaignId: 'camp_sender_invalid',
+      senderUserId: USER_ID,
+    });
+
+    expect(invalid.ok).toBe(false);
+    expect(invalid.status).toBe(400);
+    expect(invalid.error).toContain('sender');
+  });
+
+  it('returns a server config error when SMTP_SENDERS_JSON is malformed', async () => {
+    process.env.SMTP_HOST = 'mail.primary.gr';
+    process.env.SMTP_PORT = '587';
+    process.env.SMTP_SECURE = 'false';
+    process.env.SMTP_USER = 'info@kktires.gr';
+    process.env.SMTP_PASS = 'primary-secret';
+    process.env.SMTP_FROM = 'info@kktires.gr';
+    process.env.SMTP_SENDERS_JSON = '{"broken":true';
+
+    await seedCustomer('cust_sender_broken', { email: 'sender-broken@example.com', firstName: 'Sender Broken' });
+    await seedCampaign(
+      'camp_sender_broken',
+      {
+        customerIds: ['cust_sender_broken'],
+      },
+      { fromEmail: 'info@kctparts.gr' }
+    );
+
+    const result = await jobQueueModule.enqueueCampaignSend({
+      orgId: ORG_ID,
+      campaignId: 'camp_sender_broken',
+      senderUserId: USER_ID,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(503);
+    expect(result.code).toBe('SMTP_NOT_CONFIGURED');
+    expect(result.error).toContain('configuration');
   });
 });

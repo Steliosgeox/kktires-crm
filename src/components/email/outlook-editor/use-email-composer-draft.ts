@@ -24,6 +24,7 @@ export function createEmailComposerDraft(
   return {
     campaignName: input.campaignName ?? '',
     subject: input.subject ?? '',
+    fromEmail: input.fromEmail ?? null,
     content: input.content ?? '',
     recipientFilters: input.recipientFilters ?? { ...EMPTY_RECIPIENT_FILTERS },
     attachments: input.attachments ?? [],
@@ -40,6 +41,7 @@ export function mergeEmailComposerDraft(
     campaignName:
       patch.campaignName !== undefined ? patch.campaignName : current.campaignName,
     subject: patch.subject !== undefined ? patch.subject : current.subject,
+    fromEmail: patch.fromEmail !== undefined ? patch.fromEmail : current.fromEmail,
     content: patch.content !== undefined ? patch.content : current.content,
     recipientFilters:
       patch.recipientFilters !== undefined
@@ -76,6 +78,11 @@ export function useEmailComposerDraft(defaultSignatureId: string | null = null):
         setDraft((current) => ({
           ...current,
           subject: typeof value === 'function' ? value(current.subject) : value,
+        })),
+      setFromEmail: (value) =>
+        setDraft((current) => ({
+          ...current,
+          fromEmail: typeof value === 'function' ? value(current.fromEmail) : value,
         })),
       setContent: (value) =>
         setDraft((current) => ({

@@ -10,6 +10,7 @@ import {
 } from '@/components/email/outlook-editor/use-email-composer-draft';
 import type {
   CampaignAttachment,
+  CampaignSenderOption,
   InlineImageConfig,
   Signature,
   Template,
@@ -25,6 +26,7 @@ interface Campaign {
   id: string;
   name: string;
   subject: string;
+  fromEmail?: string | null;
   content?: string;
   status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed' | 'paused';
   scheduledAt: string | Date | null;
@@ -42,6 +44,11 @@ interface Campaign {
   signatureId?: string | null;
 }
 
+type EmailSendersResponse = {
+  senders?: CampaignSenderOption[];
+  primaryFromEmail?: string | null;
+};
+
 type ApiFailure = {
   message: string;
   status: number;
@@ -56,6 +63,8 @@ export function useEmailPageController() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [senders, setSenders] = useState<CampaignSenderOption[]>([]);
+  const [primaryFromEmail, setPrimaryFromEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,10 +145,11 @@ export function useEmailPageController() {
       setLoading(true);
       setError(null);
 
-      const [campaignsRes, templatesRes, signaturesRes] = await Promise.all([
+      const [campaignsRes, templatesRes, signaturesRes, sendersRes] = await Promise.all([
         fetch('/api/campaigns'),
         fetch('/api/templates'),
         fetch('/api/signatures'),
+        fetch('/api/email/senders'),
       ]);
 
       const readError = async (response: Response) => {
@@ -181,12 +191,22 @@ export function useEmailPageController() {
         failures.push(`Signatures: ${await readError(signaturesRes)}`);
       }
 
+      if (sendersRes.ok) {
+        const data = (await sendersRes.json()) as EmailSendersResponse;
+        setSenders(data.senders || []);
+        setPrimaryFromEmail(data.primaryFromEmail || null);
+      } else {
+        setSenders([]);
+        setPrimaryFromEmail(null);
+        failures.push(`Senders: ${await readError(sendersRes)}`);
+      }
+
       if (failures.length > 0) {
         const message = failures.join(' | ');
         setError(message);
         toast.error('Failed to load email data', message);
 
-        if ([campaignsRes, templatesRes, signaturesRes].some((response) => response.status === 401)) {
+        if ([campaignsRes, templatesRes, signaturesRes, sendersRes].some((response) => response.status === 401)) {
           router.push('/login');
         }
       }
@@ -274,6 +294,14 @@ export function useEmailPageController() {
   );
 
   const recipientCount = recipientCountData?.count ?? 0;
+  const autoSelectedSenderEmail = senders.length === 1 ? senders[0]?.fromEmail ?? null : null;
+  const effectiveFromEmail = draft.fromEmail ?? autoSelectedSenderEmail;
+  const requiresSenderSelection = isNew && senders.length > 1;
+
+  useEffect(() => {
+    if (!autoSelectedSenderEmail || draft.fromEmail) return;
+    draftActions.setFromEmail(autoSelectedSenderEmail);
+  }, [autoSelectedSenderEmail, draft.fromEmail, draftActions]);
 
   const invalidateCampaignLoad = useCallback(() => {
     campaignLoadRequestIdRef.current += 1;
@@ -336,6 +364,7 @@ export function useEmailPageController() {
             {
               campaignName: campaign.name,
               subject: campaign.subject,
+              fromEmail: campaign.fromEmail ?? null,
               content: campaign.content || '',
               recipientFilters: normalizeRecipientFiltersClient(campaign.recipientFilters),
               attachments: campaign.assets?.attachments || [],
@@ -372,6 +401,7 @@ export function useEmailPageController() {
         {
           campaignName: template.name,
           subject: template.subject,
+          fromEmail: null,
           content: template.content || '',
           recipientFilters: { ...EMPTY_RECIPIENT_FILTERS },
           attachments: [],
@@ -386,6 +416,7 @@ export function useEmailPageController() {
   const buildCampaignPayload = (status: Campaign['status'], scheduledAt?: string) => ({
     name: draft.campaignName,
     subject: draft.subject,
+    fromEmail: effectiveFromEmail,
     content: draft.content,
     status,
     scheduledAt,
@@ -411,6 +442,10 @@ export function useEmailPageController() {
 
       if (sendNow && recipientCount <= 0) {
         throw new Error('Select at least one recipient before sending.');
+      }
+
+      if (sendNow && requiresSenderSelection && !effectiveFromEmail) {
+        throw new Error('Select a sender before sending this campaign.');
       }
 
       if (sendNow) {
@@ -486,6 +521,10 @@ export function useEmailPageController() {
 
       if (recipientCount <= 0) {
         throw new Error('Select at least one recipient before scheduling.');
+      }
+
+      if (requiresSenderSelection && !effectiveFromEmail) {
+        throw new Error('Select a sender before scheduling this campaign.');
       }
 
       setSaving(true);
@@ -614,6 +653,7 @@ export function useEmailPageController() {
           {
             campaignName: `${campaign.name} (Αντίγραφο)`,
             subject: campaign.subject || '',
+            fromEmail: campaign.fromEmail ?? null,
             content: campaign.content || '',
             recipientFilters: normalizeRecipientFiltersClient(campaign.recipientFilters),
             attachments: campaign.assets?.attachments || [],
@@ -668,6 +708,8 @@ export function useEmailPageController() {
     usesDeliverySnapshot,
     templates,
     signatures,
+    senders,
+    primaryFromEmail,
     callbacks: {
       handleSectionChange,
       handleNewCampaign,
@@ -684,6 +726,8 @@ export function useEmailPageController() {
       saving,
       sending,
       isNew,
+      requiresSenderSelection,
+      hasSelectedSender: !!effectiveFromEmail,
     },
   };
 }

@@ -12,6 +12,7 @@ describe('email composer draft helpers', () => {
     expect(draft).toEqual({
       campaignName: '',
       subject: '',
+      fromEmail: null,
       content: '',
       recipientFilters: { ...EMPTY_RECIPIENT_FILTERS },
       attachments: [],
@@ -24,6 +25,7 @@ describe('email composer draft helpers', () => {
     const draft = createEmailComposerDraft(
       {
         campaignName: 'Spring Offer',
+        fromEmail: 'info@kctparts.gr',
         selectedSignature: 'signature-explicit',
         inlineImages: [
           {
@@ -40,6 +42,7 @@ describe('email composer draft helpers', () => {
     );
 
     expect(draft.selectedSignature).toBe('signature-explicit');
+    expect(draft.fromEmail).toBe('info@kctparts.gr');
     expect(draft.inlineImages[0].sortOrder).toBe(0);
   });
 
@@ -69,6 +72,7 @@ describe('email composer draft helpers', () => {
     );
 
     expect(nextDraft.subject).toBe('Updated subject');
+    expect(nextDraft.fromEmail).toBe(currentDraft.fromEmail);
     expect(nextDraft.inlineImages).toBe(currentDraft.inlineImages);
   });
 

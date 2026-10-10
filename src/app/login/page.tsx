@@ -49,7 +49,7 @@ function LoginContent() {
               </svg>
             </motion.div>
             <h1 className="text-2xl font-bold text-white mb-2">KK Tires CRM</h1>
-            <p className="text-white/60">Συνδεθείτε με το Google λογαριασμό σας</p>
+            <p className="text-white/60">Συνδεθείτε με τον εξουσιοδοτημένο εταιρικό λογαριασμό σας</p>
           </div>
 
           {/* Error message */}
@@ -140,7 +140,7 @@ function LoginContent() {
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="info@kktires.gr"
+              placeholder="info@your-company.gr"
               type="email"
               autoComplete="email"
               className="w-full px-4 py-3 rounded-lg bg-white/[0.06] border border-white/[0.10] text-white placeholder:text-white/40 outline-none focus:ring-2 focus:ring-cyan-500/50"
@@ -156,7 +156,7 @@ function LoginContent() {
 
           {/* Info */}
           <p className="mt-6 text-center text-white/40 text-sm">
-            Συνδεθείτε με τον Google λογαριασμό σας
+            Επιτρέπονται μόνο οι εταιρικοί λογαριασμοί που έχουν προστεθεί στο σύστημα
           </p>
         </div>
 

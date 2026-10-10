@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { vi } from 'vitest';
 
 const { mockGetSmtpReadiness, mockSendSmtpEmailDetailed } = vi.hoisted(() => ({
   mockGetSmtpReadiness: vi.fn(),
@@ -46,6 +46,45 @@ describe('email transport (SMTP-only)', () => {
       expect(sendResult.errorCode).toBe('SMTP_NOT_CONFIGURED');
       expect(sendResult.errorMessage).toContain('SMTP is not configured');
     }
+  });
+
+  it('forwards smtpSenderEmail into readiness and SMTP send calls', async () => {
+    mockGetSmtpReadiness.mockReturnValue({
+      configured: true,
+      missing: [],
+      host: 'smtp.parts.gr',
+      port: 587,
+      secure: false,
+      from: 'info@kctparts.gr',
+    });
+    mockSendSmtpEmailDetailed.mockResolvedValue({
+      ok: true,
+      provider: 'smtp',
+      messageId: '<msg-kctparts@example.com>',
+    });
+
+    const { ensureEmailTransportReady, sendEmail } = await import('@/server/email/transport');
+
+    expect(ensureEmailTransportReady('info@kctparts.gr')).toEqual({
+      ok: true,
+      provider: 'smtp',
+    });
+    expect(mockGetSmtpReadiness).toHaveBeenCalledWith('info@kctparts.gr');
+
+    await sendEmail({
+      to: 'receiver@example.com',
+      subject: 'Hello',
+      html: '<p>Hi</p>',
+      smtpSenderEmail: 'info@kctparts.gr',
+    });
+
+    expect(mockGetSmtpReadiness).toHaveBeenLastCalledWith('info@kctparts.gr');
+    expect(mockSendSmtpEmailDetailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        smtpSenderEmail: 'info@kctparts.gr',
+        senderEmail: 'info@kctparts.gr',
+      })
+    );
   });
 
   it('returns success payload for SMTP send success', async () => {
